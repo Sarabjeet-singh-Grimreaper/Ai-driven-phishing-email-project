@@ -1,11 +1,3 @@
-"""
-AI-Driven Phishing Email Detector - Streamlit App
-------------------------------------------------
-This dashboard loads the serialized ML components to offer an interactive email
-threat classification workspace. It extracts linguistic & structural features,
-evaluates risk levels, and displays explainable classification insights.
-"""
-
 import os
 import re
 import pandas as pd
@@ -21,15 +13,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling (Rich dark/cybersecurity design)
+# Custom Styling (Rich dark/cybersecurity design without deprecated classes)
 st.markdown("""
 <style>
-    .main {
+    /* Base theme override */
+    .stApp {
         background-color: #0e1117;
         color: #ffffff;
-    }
-    .reportview-container {
-        background: #0e1117;
     }
     h1, h2, h3 {
         color: #00f2fe !important;
@@ -40,21 +30,12 @@ st.markdown("""
         color: #ffffff;
         border: 1px solid #00f2fe;
     }
-    .risk-high {
-        background-color: rgba(255, 75, 75, 0.1);
-        border: 2px solid #ff4b4b;
-        padding: 20px;
-        border-radius: 10px;
-        color: #ff4b4b;
-        font-weight: bold;
-    }
-    .risk-safe {
-        background-color: rgba(9, 171, 59, 0.1);
-        border: 2px solid #09ab3b;
-        padding: 20px;
-        border-radius: 10px;
-        color: #09ab3b;
-        font-weight: bold;
+    /* Metrics custom container */
+    div[data-testid="stMetric"] {
+        background-color: #1b1e26;
+        border: 1px solid #2d3139;
+        border-radius: 8px;
+        padding: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -115,74 +96,83 @@ else:
 
         email_input = st.text_area("Email Content:", placeholder="Paste raw email body here...", height=220)
 
-        if st.button("Run Security Scan"):
+        # Main Threat Prediction block using new UX strategies
+        if st.button("🚀 Run Comprehensive Security Scan"):
             if not email_input.strip():
-                st.warning("Please enter some text to scan.")
+                st.warning("⚠️ Action Required: Please paste an email body to analyze.")
             else:
-                # 1. Preprocessing
-                cleaned_text = preprocess_text(email_input)
+                # Create a clean native loader experience
+                with st.spinner("Analyzing linguistic structures and inspecting heuristic footprints..."):
+                    # 1. Preprocessing and feature engineering executions
+                    cleaned_text = preprocess_text(email_input)
+                    
+                    # Enhanced Heuristics mapping realistic phishing email features
+                    url_pattern = re.compile(
+                        r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
+                        re.IGNORECASE
+                    )
+                    has_url = 1 if url_pattern.search(email_input) else 0
+                    
+                    urgency_keywords = ['urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 'restricted', 'security', 'update', 'password', 'confirm', 'attention', 'required', 'login']
+                    urgency_count = sum(1 for word in urgency_keywords if word in email_input.lower())
+                    email_length = len(email_input)
+                    exclamation_count = email_input.count('!')
+                    money_char_count = email_input.count('$') + email_input.count('€') + email_input.count('£') + email_input.lower().count('usd') + email_input.lower().count('transfer')
+                    
+                    # 2. Scale and Predict
+                    meta_df = pd.DataFrame([{
+                        'has_url': has_url,
+                        'urgency_count': urgency_count,
+                        'email_length': email_length,
+                        'exclamation_count': exclamation_count,
+                        'money_char_count': money_char_count
+                    }])
+                    scale_cols = ['urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
+                    meta_df[scale_cols] = scaler.transform(meta_df[scale_cols])
+                    
+                    tfidf_feat = vectorizer.transform([cleaned_text]).toarray()
+                    tfidf_df = pd.DataFrame(tfidf_feat, columns=vectorizer.get_feature_names_out())
+                    X_pred = pd.concat([tfidf_df, meta_df], axis=1)
+                    
+                    prediction = model.predict(X_pred)[0]
+                    prob = model.predict_proba(X_pred)[0][1] if hasattr(model, "predict_proba") else 0.5
+
+                # 3. Clean Visual Card Layout Output
+                st.subheader("🔍 Threat Assessment Analysis")
                 
-                # 2. Structural Heuristics
-                url_pattern = re.compile(r'https?://\S+|www\.\S+|<a\s+href=')
-                has_url = 1 if url_pattern.search(email_input) else 0
+                if prediction == 1:
+                    st.error(f"🚨 **Malicious Activity Flagged:** Phishing Variant Detected with {prob*100:.1f}% certainty.")
+                else:
+                    st.success(f"✅ **Verified Clean:** Email exhibits legitimate safe behavior pattern ({100 - (prob*100):.1f}% confidence score).")
+                    
+                # 4. Highlight Explanatory Triggers (UX Feature)
+                st.markdown("### 🗺️ Visual Explanatory Blueprint")
+                st.write("This interactive blueprint highlights urgent terminology and calls to action dynamically detected inside your text:")
                 
-                urgency_keywords = ['urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 'restricted', 'security']
-                urgency_count = sum(1 for word in urgency_keywords if word in email_input.lower())
-                email_length = len(email_input)
-                exclamation_count = email_input.count('!')
-                money_char_count = email_input.count('$')
+                highlighted_text = email_input
+                # Escape html characters to avoid rendering raw HTML injected by the user but let us wrap the marked highlights
+                highlighted_text = highlighted_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 
-                # 3. Scale Features
-                meta_df = pd.DataFrame([{
-                    'has_url': has_url,
-                    'urgency_count': urgency_count,
-                    'email_length': email_length,
-                    'exclamation_count': exclamation_count,
-                    'money_char_count': money_char_count
-                }])
-                scale_cols = ['urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
-                meta_df[scale_cols] = scaler.transform(meta_df[scale_cols])
+                # Replace marked keywords safely using HTML mark tag (excluding mark tag brackets itself)
+                for word in urgency_keywords:
+                    pattern = re.compile(rf"\b({word})\b", re.IGNORECASE)
+                    highlighted_text = pattern.sub(
+                        r"<mark style='background-color: rgba(255, 165, 0, 0.35); color: #ff9900; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
+                        highlighted_text
+                    )
                 
-                # 4. Vectorize text
-                tfidf_feat = vectorizer.transform([cleaned_text]).toarray()
-                tfidf_df = pd.DataFrame(tfidf_feat, columns=vectorizer.get_feature_names_out())
+                # Format line breaks for markdown rendering in the custom container
+                highlighted_text_html = highlighted_text.replace("\n", "<br>")
                 
-                # 5. Combined Input
-                X_pred = pd.concat([tfidf_df, meta_df], axis=1)
+                st.markdown(f"<div style='background-color: #1b1e26; padding: 20px; border-radius: 8px; border-left: 5px solid #00f2fe; color: #ffffff; font-family: monospace; font-size: 14px; line-height: 1.6;'>{highlighted_text_html}</div>", unsafe_allow_html=True)
                 
-                # 6. Predict
-                prediction = model.predict(X_pred)[0]
-                prob = model.predict_proba(X_pred)[0][1] if hasattr(model, "predict_proba") else None
-                
-                st.markdown("### 🔍 Scan Results")
-                col1, col2 = st.columns([2, 1])
-                
-                with col1:
-                    if prediction == 1:
-                        st.markdown(f"""
-                        <div class="risk-high">
-                            <h3>🚨 PHISHING DETECTED</h3>
-                            <p>This email has been flagged as suspicious. Confidence: {prob*100:.1f}%</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div class="risk-safe">
-                            <h3>✅ LEGITIMATE EMAIL</h3>
-                            <p>This email exhibits safe characteristics. Phishing Probability: {prob*100:.1f}%</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                with col2:
-                    st.metric("Linguistic Risk Score", f"{prob*100:.1f}%")
-                    st.metric("Character Count", f"{email_length}")
-                
-                st.markdown("### 📊 Engineered Threat Heuristics")
-                h_col1, h_col2, h_col3, h_col4 = st.columns(4)
-                h_col1.metric("Embedded Links (URLs)", "Yes" if has_url == 1 else "None")
-                h_col2.metric("Urgency Word Matches", f"{urgency_count}")
-                h_col3.metric("Exclamation Mark Count", f"{exclamation_count}")
-                h_col4.metric("Financial Symbols ($)", f"{money_char_count}")
+                # 5. High-Impact Metrics Grid
+                st.markdown("---")
+                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                m_col1.metric("Linguistic Threat Level", f"{prob*100:.1f}%")
+                m_col2.metric("Urgency Triggers", f"{urgency_count} matches")
+                m_col3.metric("Financial Lures Found", "Yes" if money_char_count > 0 else "None")
+                m_col4.metric("Total Structural Density", f"{email_length} chars")
 
     elif app_mode == "Model Benchmarks":
         st.title("📊 Model Performance & Validation Benchmarks")
@@ -203,3 +193,4 @@ else:
                 st.image("roc_curve_comparison.png", use_container_width=True)
             else:
                 st.info("ROC comparison graph not found in workspace.")
+
