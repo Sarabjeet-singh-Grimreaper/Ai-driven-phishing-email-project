@@ -13,97 +13,124 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. DESIGN OVERHAUL: ULTRA-DARK GLASSMORPHIC STYLING
+# 2. DESIGN OVERHAUL: "THE CATALYST" ACID-DARK SYSTEM
 st.markdown("""
 <style>
     /* Global Font and Core Background Override */
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #030712 !important; /* Deep space dark */
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: #090d16 !important; /* Deep slate-space */
+        font-family: 'Inter', sans-serif !important;
         color: #f3f4f6 !important;
+        letter-spacing: -0.02em !important;
     }
     
-    /* Sleek Modern Gradient for Titles */
+    /* Clean up default Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Header typography */
     .hero-title {
+        font-family: 'Inter', sans-serif !important;
         font-weight: 700;
-        font-size: 2.8rem;
-        letter-spacing: -0.05rem;
-        background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        font-size: 2.6rem;
+        letter-spacing: -0.04em;
+        color: #ffffff;
         text-align: center;
         margin-bottom: 0px;
         padding-bottom: 5px;
+        text-transform: uppercase;
     }
     
     .hero-subtitle {
         color: #9ca3af;
-        font-size: 1.1rem;
+        font-size: 0.9rem;
         text-align: center;
         margin-bottom: 40px;
-        font-weight: 300;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* Machined Silver Card System */
+    .machined-card {
+        background-color: rgba(255, 255, 255, 0.03) !important;
+        border: 1px solid #374151 !important;
+        border-radius: 0px !important;
+        padding: 24px;
+        margin-top: 20px;
+        margin-bottom: 20px;
     }
 
     /* Premium Input Container */
     div[data-testid="stForm"], .stTextArea textarea {
-        background-color: #0b0f19 !important;
-        border: 1px solid #1f2937 !important;
-        border-radius: 12px !important;
+        background-color: rgba(255, 255, 255, 0.02) !important;
+        border: 1px solid #374151 !important;
+        border-radius: 0px !important;
         color: #f3f4f6 !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-family: 'Inter', sans-serif !important;
+        transition: all 0.2s ease-in-out;
     }
     
     .stTextArea textarea:focus {
-        border-color: #6366f1 !important;
-        box-shadow: 0 0 0 1px #6366f1, 0 0 20px rgba(99, 102, 241, 0.15) !important;
+        border-color: #d4ff00 !important;
+        box-shadow: 0 0 0 1px #d4ff00 !important;
     }
 
-    /* Modern SaaS Interactive Primary Action Button */
+    /* Modern SaaS Interactive Primary Action Button (Catalyst mechanical layout) */
     .stButton button {
-        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-        color: #ffffff !important;
-        border: none !important;
-        padding: 10px 24px !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        letter-spacing: -0.01rem !important;
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2) !important;
-        transition: all 0.2s ease-in-out !important;
+        background-color: #d4ff00 !important;
+        color: #090d16 !important;
+        border: 2px solid #000000 !important;
+        border-radius: 0px !important;
+        padding: 12px 28px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        box-shadow: 4px 4px 0px #000000 !important;
+        transition: all 0.15s ease-in-out !important;
         width: 100%;
     }
     
     .stButton button:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35) !important;
-        background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%) !important;
+        transform: translate(-2px, -2px) !important;
+        box-shadow: 6px 6px 0px #000000 !important;
+        background-color: #ccff00 !important;
+        color: #090d16 !important;
+    }
+    
+    .stButton button:active {
+        transform: translate(2px, 2px) !important;
+        box-shadow: 2px 2px 0px #000000 !important;
     }
 
-    /* Styled Status Cards */
+    /* Styled Status Cards with Deep Warning Aura */
     .threat-card-malicious {
-        background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.02) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.4);
-        border-left: 4px solid #ef4444;
+        background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.02) 100%) !important;
+        border: 1px solid #ef4444 !important;
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.15) !important;
+        border-left: 4px solid #ef4444 !important;
         padding: 24px;
-        border-radius: 12px;
+        border-radius: 0px !important;
         margin-top: 20px;
     }
     
     .threat-card-safe {
-        background: linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.02) 100%);
-        border: 1px solid rgba(16, 185, 129, 0.4);
-        border-left: 4px solid #10b981;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%) !important;
+        border: 1px solid #374151 !important;
+        border-left: 4px solid #d4ff00 !important;
         padding: 24px;
-        border-radius: 12px;
+        border-radius: 0px !important;
         margin-top: 20px;
     }
 
     /* Clean Code Workspace for Explanations */
     .code-workspace {
-        background-color: #070a13;
-        border: 1px solid #111827;
-        border-radius: 8px;
+        background-color: #05070c;
+        border: 1px solid #374151;
+        border-radius: 0px;
         padding: 16px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.95rem;
@@ -113,10 +140,10 @@ st.markdown("""
 
     /* Tab styling */
     div[data-testid="stTabBar"] {
-        background-color: #0b0f19;
-        border-radius: 12px;
+        background-color: rgba(255, 255, 255, 0.02);
+        border-radius: 0px;
         padding: 4px;
-        border: 1px solid #1f2937;
+        border: 1px solid #374151;
         margin-bottom: 2rem;
     }
     button[data-baseweb="tab"] {
@@ -124,31 +151,36 @@ st.markdown("""
         border-bottom: none !important;
         padding: 8px 20px !important;
         font-weight: 600 !important;
-        border-radius: 8px !important;
+        border-radius: 0px !important;
+        text-transform: uppercase !important;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.05em !important;
         transition: all 0.2s ease !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: #1f2937 !important;
-        color: #6366f1 !important;
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        color: #d4ff00 !important;
     }
 
-    /* Metrics styling override */
+    /* Metrics override */
     div[data-testid="stMetric"] {
-        background-color: #0b0f19 !important;
-        border: 1px solid #1f2937 !important;
-        border-radius: 12px !important;
+        background-color: rgba(255, 255, 255, 0.02) !important;
+        border: 1px solid #374151 !important;
+        border-radius: 0px !important;
         padding: 14px 10px !important;
         text-align: center !important;
     }
     div[data-testid="stMetricValue"] {
-        color: #f3f4f6 !important;
+        color: #d4ff00 !important; /* Acid Yellow metrics values */
         font-size: 1.6rem !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricLabel"] {
         color: #9ca3af !important;
-        font-size: 0.85rem !important;
-        font-weight: 500 !important;
+        font-size: 0.8rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -265,24 +297,24 @@ else:
                 if prediction == 1:
                     st.markdown(f"""
                     <div class="threat-card-malicious">
-                        <h4 style="color: #f87171; margin-top:0;">🚨 MALICIOUS Footprint Identified</h4>
+                        <h4 style="color: #ef4444; margin-top:0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">🚨 MALICIOUS FOOTPRINT IDENTIFIED</h4>
                         <p style="color: #fca5a5; margin-bottom:0; font-size:0.95rem;">
-                            Structural analytics confirm signature threat metrics. Neural index evaluates phishing variant likelihood at <strong>{confidence*100:.2f}%</strong> confirmation certainty.
+                            Structural analytics confirm signature threat metrics. Neural index evaluates phishing variant likelihood at <strong style="color: #d4ff00;">{confidence*100:.2f}%</strong> confirmation certainty.
                         </p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
                     <div class="threat-card-safe">
-                        <h4 style="color: #34d399; margin-top:0;">✅ LEGITIMATE Communication Structural Pattern</h4>
-                        <p style="color: #6ee7b7; margin-bottom:0; font-size:0.95rem;">
-                            Ingested sequence matches standard communication parameters. Phishing anomaly threat probability drops below <strong>{(1-confidence)*100:.2f}%</strong> validation variance thresholds.
+                        <h4 style="color: #d4ff00; margin-top:0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">✅ LEGITIMATE PATTERN CONFIRMED</h4>
+                        <p style="color: #f3f4f6; margin-bottom:0; font-size:0.95rem;">
+                            Ingested sequence matches standard communication parameters. Phishing anomaly threat probability drops below <strong style="color: #d4ff00;">{(1-confidence)*100:.2f}%</strong> validation variance thresholds.
                         </p>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 # Interactive Semantic Highlighting Display (Explainable UX UI Feature)
-                st.markdown("<br><h4 style='color: #a5b4fc; font-size: 1.1rem;'>🗺️ Highlighted Key Risk Anomaly Identifiers</h4>", unsafe_allow_html=True)
+                st.markdown("<br><h4 style='color: #ffffff; font-size: 1.1rem; text-transform: uppercase; font-weight:600; letter-spacing: 0.05em;'>🗺️ Highlighted Key Risk Anomaly Identifiers</h4>", unsafe_allow_html=True)
                 highlighted_output = email_payload
                 
                 # Escape HTML characters first
@@ -291,7 +323,7 @@ else:
                 for term in urgency_keywords + mfa_keywords:
                     highlighted_output = re.sub(
                         f"\\b({term})\\b", 
-                        r"<mark style='background-color: rgba(245, 158, 11, 0.25); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-weight:500;'>\1</mark>", 
+                        r"<mark style='background-color: rgba(212, 255, 0, 0.15); color: #d4ff00; padding: 2px 6px; border-radius: 0px; font-weight:600;'>\1</mark>", 
                         highlighted_output, 
                         flags=re.IGNORECASE
                     )
@@ -308,8 +340,9 @@ else:
                 g4.metric("Structural Length", f"{email_length} chars")
 
     with tabs[1]:
-        st.markdown("<h4 style='color: #a5b4fc; font-size: 1.2rem;'>📈 System Validation Curves & Validation Matrices</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #ffffff; font-size: 1.2rem; text-transform: uppercase; font-weight: 600;'>📈 System Validation Curves & Validation Matrices</h4>", unsafe_allow_html=True)
         st.write("Review localized cross-validation reports tracking historical validation tests across continuous evaluation loops:")
+        st.write("")
         
         c1, c2 = st.columns(2)
         with c1:
@@ -324,8 +357,9 @@ else:
                 st.info("System Notification: ROC performance log charts missing from operational directory layers.")
 
     with tabs[2]:
-        st.markdown("<h4 style='color: #a5b4fc; font-size: 1.2rem;'>🛡️ Beyond AI: The Human Firewall Checklist</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #ffffff; font-size: 1.2rem; text-transform: uppercase; font-weight: 600;'>🛡️ Beyond AI: The Human Firewall Checklist</h4>", unsafe_allow_html=True)
         st.write("No AI model is 100% foolproof against highly targeted attacks (like spear-phishing or zero-days). Use this checklist to verify indicators outside the raw text:")
+        st.write("")
         
         st.checkbox("✉️ **Verify the Sender's Actual Domain**: Attackers use display name spoofing (e.g., displaying 'Netflix Security' but sending from `admin@netflix-security-update.xyz`). Check the address suffix carefully.")
         st.checkbox("🔗 **Inspect Hyperlinks (Hover, Don't Click)**: Hover over any links to check where they actually lead. Look for typos or character substitutions (e.g., `micros0ft.com` or `paypa1.com`).")
@@ -333,4 +367,3 @@ else:
         st.checkbox("📞 **Use Out-of-Band Verification**: If an email claims to be from a colleague or your bank requesting urgent changes, verify it independently by calling them or messaging them on a known channel.")
         
         st.info("💡 **Pro-Tip**: Safe emails never demand that you verify MFA/2FA codes via unencrypted email forms or click direct links to authorize high-security transactions.")
-

@@ -53,18 +53,34 @@ def predict_email(raw_email):
     cleaned_text = preprocess_text(raw_email)
     
     # 2. Extract structural features
-    url_pattern = re.compile(r'https?://\S+|www\.\S+|<a\s+href=')
-    has_url = 1 if url_pattern.search(raw_email) else 0
+    url_pattern = re.compile(
+        r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
+        re.IGNORECASE
+    )
+    url_count = len(url_pattern.findall(raw_email))
     
-    urgency_keywords = ['urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 'restricted', 'security']
+    tld_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
+    has_suspicious_tld = 1 if tld_pattern.search(raw_email) else 0
+
+    mfa_keywords = ['mfa', '2fa', 'otp', 'authenticator', 'verification code', 'one-time', 'passcode']
+    has_mfa_lure = 1 if any(word in raw_email.lower() for word in mfa_keywords) else 0
+
+    urgency_keywords = [
+        'urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 
+        'restricted', 'security', 'update', 'password', 'confirm', 'attention', 'required', 'login',
+        'unusual', 'activity', 'invoice', 'overdue', 'billing', 'delivery', 'fedex', 'ups', 'paypal', 
+        'crypto', 'wallet', 'authorize', 'deactivate', 'block'
+    ]
     urgency_count = sum(1 for word in urgency_keywords if word in raw_email.lower())
     email_length = len(raw_email)
     exclamation_count = raw_email.count('!')
-    money_char_count = raw_email.count('$')
+    money_char_count = raw_email.count('$') + raw_email.count('€') + raw_email.count('£') + raw_email.lower().count('usd') + raw_email.lower().count('transfer')
     
     # 3. Create metadata frame and scale
     meta_df = pd.DataFrame([{
-        'has_url': has_url,
+        'url_count': url_count,
+        'has_suspicious_tld': has_suspicious_tld,
+        'has_mfa_lure': has_mfa_lure,
         'urgency_count': urgency_count,
         'email_length': email_length,
         'exclamation_count': exclamation_count,
@@ -72,7 +88,7 @@ def predict_email(raw_email):
     }])
     
     # Scale non-binary metadata columns using loaded scaler
-    scale_cols = ['urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
+    scale_cols = ['url_count', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
     meta_df[scale_cols] = scaler.transform(meta_df[scale_cols])
     
     # 4. Vectorize text features
@@ -88,24 +104,28 @@ def predict_email(raw_email):
     
     return pred_label, pred_prob
 
-# Define test samples
+# Define test samples with modern cyber threats
 test_cases = [
     {
-        "desc": "Suspicious Phishing Email (Urgency lure & link)",
-        "text": "URGENT SECURITY ALERT! Your account has been compromised by an unauthorized login attempt from IP 192.168.1.100. Please click on http://update-secure-banking.net immediately to verify your profile details and restore access. Failure to comply in 12 hours will lead to account suspension."
+        "desc": "Simulated Urgent Security MFA Bypass Attack",
+        "text": "Microsoft Security Alert: Unusual login activity has been detected on your Office365 account from a foreign IP address. To prevent permanent deactivation, you must verify your profile details immediately. Click here to confirm your 2FA Authentication Code: http://verification-mfa-security.support/auth-login"
     },
     {
-        "desc": "Legitimate Corporate Sync Email",
-        "text": "Hi team, quick reminder that our progress review meeting is scheduled for tomorrow at 2:00 PM in Conference Room B. We'll go over the Q3 planning slides and milestones. See you all there, John."
+        "desc": "Simulated Urgent Invoice Billing Scam",
+        "text": "Dear customer, your payment of $1,450.00 for the outstanding invoice #94022 is past due. To avoid late service interruption fees, verify details and settle your balance immediately by visiting our secure transfer portal: http://bit.ly/payment-invoice-process"
+    },
+    {
+        "desc": "Legitimate Personal Check-in",
+        "text": "Hey there! Long time no see. Let me know if you are free to grab lunch sometime next week. I wanted to catch up and show you the new project I've been working on. Talk soon."
     }
 ]
 
 print("=== Running Phishing Detection Predictor Tests ===\n")
 for idx, case in enumerate(test_cases, start=1):
     label, prob = predict_email(case["text"])
-    status = "PHISHING" if label == 1 else "SAFE"
-    confidence_str = f" (Confidence: {prob*100:.2f}%)" if prob is not None else ""
+    status = "PHISHING DETECTED" if label == 1 else "SAFE/LEGITIMATE"
+    confidence_str = f" (Threat confidence: {prob*100:.2f}%)" if prob is not None else ""
     print(f"Test Case {idx}: {case['desc']}")
     print(f"Prediction: {status}{confidence_str}")
-    print(f"Email Content: '{case['text'][:120]}...'")
+    print(f"Email Content: '{case['text']}'")
     print("-" * 60)
