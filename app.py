@@ -5,61 +5,122 @@ import numpy as np
 import streamlit as st
 import joblib
 
-# Page configuration
+# 1. PAGE SETUP WITH MODERN SAAS CONFIGURATION
 st.set_page_config(
-    page_title="AI Phishing Detector",
+    page_title="AI Phishing Portal",
     page_icon="🛡️",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# Custom Styling (Minimalist, modern, and high-end security interface)
+# 2. DESIGN OVERHAUL: ULTRA-DARK GLASSMORPHIC STYLING
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-
-    /* Global styles */
-    .stApp {
-        background-color: #0B0F17;
-        color: #F8FAFC;
+    /* Global Font and Core Background Override */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: #030712 !important; /* Deep space dark */
         font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #f3f4f6 !important;
     }
     
-    /* Clean up default Streamlit elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-
-    /* Header styling */
-    .header-container {
-        text-align: center;
-        padding: 2.5rem 0 1.5rem 0;
-    }
-    .header-title {
-        font-size: 2.5rem;
+    /* Sleek Modern Gradient for Titles */
+    .hero-title {
         font-weight: 700;
-        letter-spacing: -0.025em;
-        background: linear-gradient(135deg, #38BDF8 0%, #818CF8 100%);
+        font-size: 2.8rem;
+        letter-spacing: -0.05rem;
+        background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
+        text-align: center;
+        margin-bottom: 0px;
+        padding-bottom: 5px;
     }
-    .header-subtitle {
-        color: #94A3B8;
-        font-size: 1.05rem;
-        font-weight: 400;
+    
+    .hero-subtitle {
+        color: #9ca3af;
+        font-size: 1.1rem;
+        text-align: center;
+        margin-bottom: 40px;
+        font-weight: 300;
+    }
+
+    /* Premium Input Container */
+    div[data-testid="stForm"], .stTextArea textarea {
+        background-color: #0b0f19 !important;
+        border: 1px solid #1f2937 !important;
+        border-radius: 12px !important;
+        color: #f3f4f6 !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .stTextArea textarea:focus {
+        border-color: #6366f1 !important;
+        box-shadow: 0 0 0 1px #6366f1, 0 0 20px rgba(99, 102, 241, 0.15) !important;
+    }
+
+    /* Modern SaaS Interactive Primary Action Button */
+    .stButton button {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 10px 24px !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.01rem !important;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2) !important;
+        transition: all 0.2s ease-in-out !important;
+        width: 100%;
+    }
+    
+    .stButton button:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35) !important;
+        background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%) !important;
+    }
+
+    /* Styled Status Cards */
+    .threat-card-malicious {
+        background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.02) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-left: 4px solid #ef4444;
+        padding: 24px;
+        border-radius: 12px;
+        margin-top: 20px;
+    }
+    
+    .threat-card-safe {
+        background: linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.02) 100%);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        border-left: 4px solid #10b981;
+        padding: 24px;
+        border-radius: 12px;
+        margin-top: 20px;
+    }
+
+    /* Clean Code Workspace for Explanations */
+    .code-workspace {
+        background-color: #070a13;
+        border: 1px solid #111827;
+        border-radius: 8px;
+        padding: 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: #e5e7eb;
     }
 
     /* Tab styling */
     div[data-testid="stTabBar"] {
-        background-color: #111827;
+        background-color: #0b0f19;
         border-radius: 12px;
         padding: 4px;
-        border: 1px solid #1F2937;
+        border: 1px solid #1f2937;
         margin-bottom: 2rem;
     }
     button[data-baseweb="tab"] {
-        color: #94A3B8 !important;
+        color: #9ca3af !important;
         border-bottom: none !important;
         padding: 8px 20px !important;
         font-weight: 600 !important;
@@ -67,108 +128,43 @@ st.markdown("""
         transition: all 0.2s ease !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: #1F2937 !important;
-        color: #38BDF8 !important;
+        background-color: #1f2937 !important;
+        color: #6366f1 !important;
     }
 
-    /* Textarea styling */
-    div[data-testid="stTextArea"] textarea {
-        background-color: #111827 !important;
-        color: #F8FAFC !important;
-        border: 1px solid #1F2937 !important;
-        border-radius: 12px !important;
-        padding: 16px !important;
-        font-size: 15px !important;
-        line-height: 1.6 !important;
-        transition: all 0.3s ease !important;
-    }
-    div[data-testid="stTextArea"] textarea:focus {
-        border-color: #38BDF8 !important;
-        box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15) !important;
-    }
-
-    /* Button styling */
-    div[data-testid="stButton"] button {
-        background: linear-gradient(135deg, #38BDF8 0%, #818CF8 100%) !important;
-        color: #ffffff !important;
-        border: none !important;
-        padding: 10px 24px !important;
-        font-weight: 600 !important;
-        border-radius: 10px !important;
-        transition: all 0.2s ease-in-out !important;
-        width: 100% !important;
-        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15) !important;
-    }
-    div[data-testid="stButton"] button:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 6px 20px rgba(56, 189, 248, 0.25) !important;
-        color: #ffffff !important;
-    }
-
-    /* Card Layouts */
-    .result-card {
-        background: #111827;
-        border-radius: 16px;
-        border: 1px solid #1F2937;
-        padding: 24px;
-        margin-top: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-    .threat-badge {
-        display: inline-block;
-        padding: 6px 14px;
-        border-radius: 9999px;
-        font-size: 0.85rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 1.25rem;
-    }
-    .threat-badge.malicious {
-        background-color: rgba(239, 68, 68, 0.15);
-        color: #F87171;
-        border: 1px solid rgba(239, 68, 68, 0.2);
-    }
-    .threat-badge.clean {
-        background-color: rgba(16, 185, 129, 0.15);
-        color: #34D399;
-        border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-
-    /* Metrics override */
+    /* Metrics styling override */
     div[data-testid="stMetric"] {
-        background-color: #111827 !important;
-        border: 1px solid #1F2937 !important;
+        background-color: #0b0f19 !important;
+        border: 1px solid #1f2937 !important;
         border-radius: 12px !important;
         padding: 14px 10px !important;
         text-align: center !important;
     }
     div[data-testid="stMetricValue"] {
-        color: #F8FAFC !important;
+        color: #f3f4f6 !important;
         font-size: 1.6rem !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricLabel"] {
-        color: #94A3B8 !important;
+        color: #9ca3af !important;
         font-size: 0.85rem !important;
         font-weight: 500 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Load persistent ML components
+# 3. BACKGROUND ML ENGINE INITIALIZATION
 @st.cache_resource
-def load_assets():
-    model = joblib.load("best_phishing_model.joblib")
-    vectorizer = joblib.load("tfidf_vectorizer.joblib")
-    scaler = joblib.load("metadata_scaler.joblib")
-    return model, vectorizer, scaler
+def load_security_weights():
+    try:
+        model = joblib.load("best_phishing_model.joblib")
+        vectorizer = joblib.load("tfidf_vectorizer.joblib")
+        scaler = joblib.load("metadata_scaler.joblib")
+        return model, vectorizer, scaler, True
+    except:
+        return None, None, None, False
 
-try:
-    model, vectorizer, scaler = load_assets()
-    assets_loaded = True
-except Exception as e:
-    assets_loaded = False
+model, vectorizer, scaler, assets_ready = load_security_weights()
 
 STOPWORDS = set([
     "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", 
@@ -185,63 +181,54 @@ STOPWORDS = set([
     "should", "now"
 ])
 
-def preprocess_text(text):
+def preprocess_payload(text):
     if not isinstance(text, str):
         return ""
     text = text.lower()
     text = re.sub(r'<[^>]+>', ' ', text)
     text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
     tokens = text.split()
-    filtered_tokens = [word for word in tokens if word not in STOPWORDS]
-    return " ".join(filtered_tokens)
+    return " ".join([word for word in tokens if word not in STOPWORDS])
 
-# Header Section
-st.markdown("""
-<div class="header-container">
-    <div class="header-title">🛡️ AI Phishing Detector</div>
-    <div class="header-subtitle">A minimal, intelligence-powered scanner for detecting email threats</div>
-</div>
-""", unsafe_allow_html=True)
+# 4. FRONTEND HEADER ARCHITECTURE
+st.markdown('<div class="hero-title">🛡️ AI Phishing Detector</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">A minimal, intelligence-powered scanner for detecting email threats</div>', unsafe_allow_html=True)
 
-# Clean Navigation Tabs
-tab1, tab2 = st.tabs(["🛡️ Threat Predictor", "📊 Model Benchmarks"])
-
-if not assets_loaded:
-    st.error("⚠️ Persistent model assets not found! Please run the training pipeline `train_pipeline.py` first to generate models.")
+if not assets_ready:
+    st.error("🚨 Missing System Artifacts: Please run the training pipeline first (`train_pipeline.py`) to generate matching joblib configurations.")
 else:
-    with tab1:
-        st.write("")
-        email_input = st.text_area(
-            "Analyze Email Content:",
-            placeholder="Paste raw email body here...",
+    # 5. USER WORKSPACE LAYOUT
+    tabs = st.tabs(["✨ Threat Predictor", "📊 System Performance"])
+    
+    with tabs[0]:
+        email_payload = st.text_area(
+            "Email Payload Data Ingestion",
+            placeholder="Paste raw, unstructured email body strings or network text capture records here...",
             height=200,
             label_visibility="collapsed"
         )
         
-        col_btn, _ = st.columns([1, 1])
-        with col_btn:
-            scan_clicked = st.button("Scan Message")
-            
-        if scan_clicked:
-            if not email_input.strip():
-                st.warning("⚠️ Action Required: Please paste an email body to analyze.")
+        scan_triggered = st.button("Analyze Ingested Payload")
+        
+        if scan_triggered:
+            if not email_payload.strip():
+                st.info("💡 Notification: Paste text patterns inside the main ingestion workspace above before initializing analysis filters.")
             else:
-                with st.spinner("Analyzing linguistic structures..."):
-                    # 1. Preprocessing and feature engineering executions
-                    cleaned_text = preprocess_text(email_input)
+                with st.spinner("Processing local text tokens and vector structures..."):
+                    # Feature Mining & Vector Conversion Routine
+                    cleaned_body = preprocess_payload(email_payload)
                     
-                    # Enhanced Heuristics mapping realistic phishing email features
                     url_pattern = re.compile(
                         r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
                         re.IGNORECASE
                     )
-                    url_count = len(url_pattern.findall(email_input))
+                    url_count = len(url_pattern.findall(email_payload))
                     
                     tld_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
-                    has_suspicious_tld = 1 if tld_pattern.search(email_input) else 0
+                    has_suspicious_tld = 1 if tld_pattern.search(email_payload) else 0
 
                     mfa_keywords = ['mfa', '2fa', 'otp', 'authenticator', 'verification code', 'one-time', 'passcode']
-                    has_mfa_lure = 1 if any(word in email_input.lower() for word in mfa_keywords) else 0
+                    has_mfa_lure = 1 if any(word in email_payload.lower() for word in mfa_keywords) else 0
 
                     urgency_keywords = [
                         'urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 
@@ -249,97 +236,89 @@ else:
                         'unusual', 'activity', 'invoice', 'overdue', 'billing', 'delivery', 'fedex', 'ups', 'paypal', 
                         'crypto', 'wallet', 'authorize', 'deactivate', 'block'
                     ]
-                    urgency_count = sum(1 for word in urgency_keywords if word in email_input.lower())
-                    email_length = len(email_input)
-                    exclamation_count = email_input.count('!')
-                    money_char_count = email_input.count('$') + email_input.count('€') + email_input.count('£') + email_input.lower().count('usd') + email_input.lower().count('transfer')
+                    urgency_count = sum(1 for word in urgency_keywords if word in email_payload.lower())
+                    email_length = len(email_payload)
+                    exclamation_count = email_payload.count('!')
+                    money_char_count = email_payload.count('$') + email_payload.count('€') + email_payload.count('£') + email_payload.lower().count('usd') + email_payload.lower().count('transfer')
                     
-                    # 2. Scale and Predict
                     meta_df = pd.DataFrame([{
                         'url_count': url_count,
                         'has_suspicious_tld': has_suspicious_tld,
                         'has_mfa_lure': has_mfa_lure,
-                        'urgency_count': urgency_count,
+                        'urgency_count': urgency_count, 
                         'email_length': email_length,
-                        'exclamation_count': exclamation_count,
+                        'exclamation_count': exclamation_count, 
                         'money_char_count': money_char_count
                     }])
+                    
                     scale_cols = ['url_count', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
                     meta_df[scale_cols] = scaler.transform(meta_df[scale_cols])
                     
-                    tfidf_feat = vectorizer.transform([cleaned_text]).toarray()
+                    tfidf_feat = vectorizer.transform([cleaned_body]).toarray()
                     tfidf_df = pd.DataFrame(tfidf_feat, columns=vectorizer.get_feature_names_out())
-                    X_pred = pd.concat([tfidf_df, meta_df], axis=1)
+                    X_final = pd.concat([tfidf_df, meta_df], axis=1)
                     
-                    prediction = model.predict(X_pred)[0]
-                    prob = model.predict_proba(X_pred)[0][1] if hasattr(model, "predict_proba") else 0.5
-
-                # 3. Clean Visual Card Layout Output
+                    prediction = model.predict(X_final)[0]
+                    confidence = model.predict_proba(X_final)[0][1] if hasattr(model, "predict_proba") else 0.5
+                
+                # Dynamic Response Cards Rendering
                 if prediction == 1:
                     st.markdown(f"""
-                    <div class="result-card" style="border-left: 4px solid #EF4444;">
-                        <span class="threat-badge malicious">🚨 MALICIOUS THREAT DETECTED</span>
-                        <h3 style="margin: 0; color: #F87171; font-size: 1.35rem; font-weight: 700;">Linguistic Threat level flagged at {prob*100:.1f}%</h3>
-                        <p style="color: #94A3B8; margin-top: 10px; margin-bottom: 0; font-size: 0.95rem; line-height: 1.5;">This email contains high-risk phrasing patterns, urgency signals, or structural anomalies consistent with targeted phishing behavior.</p>
+                    <div class="threat-card-malicious">
+                        <h4 style="color: #f87171; margin-top:0;">🚨 MALICIOUS Footprint Identified</h4>
+                        <p style="color: #fca5a5; margin-bottom:0; font-size:0.95rem;">
+                            Structural analytics confirm signature threat metrics. Neural index evaluates phishing variant likelihood at <strong>{confidence*100:.2f}%</strong> confirmation certainty.
+                        </p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
-                    <div class="result-card" style="border-left: 4px solid #10B981;">
-                        <span class="threat-badge clean">✅ VERIFIED CLEAN</span>
-                        <h3 style="margin: 0; color: #34D399; font-size: 1.35rem; font-weight: 700;">Legitimate safe pattern confirmed ({100 - (prob*100):.1f}% confidence score)</h3>
-                        <p style="color: #94A3B8; margin-top: 10px; margin-bottom: 0; font-size: 0.95rem; line-height: 1.5;">No high-risk structures or phishing language matches detected. Standard security practices still advised.</p>
+                    <div class="threat-card-safe">
+                        <h4 style="color: #34d399; margin-top:0;">✅ LEGITIMATE Communication Structural Pattern</h4>
+                        <p style="color: #6ee7b7; margin-bottom:0; font-size:0.95rem;">
+                            Ingested sequence matches standard communication parameters. Phishing anomaly threat probability drops below <strong>{(1-confidence)*100:.2f}%</strong> validation variance thresholds.
+                        </p>
                     </div>
                     """, unsafe_allow_html=True)
-
-                # 4. Highlight Explanatory Triggers (UX Feature)
-                st.markdown("### 🗺️ Visual Explanatory Blueprint")
-                st.write("Highlighted terms below indicate urgency triggers, call-to-actions, or security keywords detected:")
                 
-                highlighted_text = email_input
-                # Escape html characters to avoid rendering raw HTML injected by the user but let us wrap the marked highlights
-                highlighted_text = highlighted_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                # Interactive Semantic Highlighting Display (Explainable UX UI Feature)
+                st.markdown("<br><h4 style='color: #a5b4fc; font-size: 1.1rem;'>🗺️ Highlighted Key Risk Anomaly Identifiers</h4>", unsafe_allow_html=True)
+                highlighted_output = email_payload
                 
-                # Replace marked keywords safely using HTML mark tag (excluding mark tag brackets itself)
-                for word in urgency_keywords + mfa_keywords:
-                    pattern = re.compile(rf"\b({word})\b", re.IGNORECASE)
-                    highlighted_text = pattern.sub(
-                        r"<mark style='background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; padding: 2px 6px; border-radius: 4px; font-weight: 600;'>\1</mark>",
-                        highlighted_text
+                # Escape HTML characters first
+                highlighted_output = highlighted_output.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                
+                for term in urgency_keywords + mfa_keywords:
+                    highlighted_output = re.sub(
+                        f"\\b({term})\\b", 
+                        r"<mark style='background-color: rgba(245, 158, 11, 0.25); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-weight:500;'>\1</mark>", 
+                        highlighted_output, 
+                        flags=re.IGNORECASE
                     )
+                # Convert newlines to breaks for HTML workspace
+                highlighted_output = highlighted_output.replace("\n", "<br>")
+                st.markdown(f'<div class="code-workspace">{highlighted_output}</div>', unsafe_allow_html=True)
                 
-                # Format line breaks for markdown rendering in the custom container
-                highlighted_text_html = highlighted_text.replace("\n", "<br>")
-                
-                st.markdown(f"<div style='background-color: #111827; padding: 20px; border-radius: 12px; border: 1px solid #1F2937; color: #F8FAFC; font-family: monospace; font-size: 14px; line-height: 1.7;'>{highlighted_text_html}</div>", unsafe_allow_html=True)
-                st.write("")
+                # Metrics Grid Architecture Injections
+                st.markdown("<br>", unsafe_allow_html=True)
+                g1, g2, g3, g4 = st.columns(4)
+                g1.metric("Anomalous Risk Index", f"{confidence*100:.1f}%")
+                g2.metric("Urgency Matches", f"{urgency_count}")
+                g3.metric("Link Count / Threat TLDs", f"{url_count} / {'Yes' if has_suspicious_tld else 'No'}")
+                g4.metric("Structural Length", f"{email_length} chars")
 
-                # 5. High-Impact Metrics Grid
-                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                m_col1.metric("Linguistic Threat Level", f"{prob*100:.1f}%")
-                m_col2.metric("Urgency Triggers", f"{urgency_count} matches")
-                m_col3.metric("Financial Lures", "Yes" if money_char_count > 0 else "None")
-                m_col4.metric("Link Count / Threat TLDs", f"{url_count} / {'Yes' if has_suspicious_tld else 'No'}")
-
-    with tab2:
-        st.write("")
-        st.markdown("### 📊 Model Performance & Validation Benchmarks")
-        st.write("Below are the comparative evaluation charts generated during training.")
-        st.write("")
+    with tabs[1]:
+        st.markdown("<h4 style='color: #a5b4fc; font-size: 1.2rem;'>📈 System Validation Curves & Validation Matrices</h4>", unsafe_allow_html=True)
+        st.write("Review localized cross-validation reports tracking historical validation tests across continuous evaluation loops:")
         
-        bench_col1, bench_col2 = st.columns(2)
-        
-        with bench_col1:
-            st.markdown("#### Confusion Matrix")
+        c1, c2 = st.columns(2)
+        with c1:
             if os.path.exists("confusion_matrix.png"):
-                st.image("confusion_matrix.png", use_container_width=True)
+                st.image("confusion_matrix.png", caption="Evaluation Loop Confusion Matrix Chart", use_container_width=True)
             else:
-                st.info("Confusion matrix graph not found in workspace.")
-                
-        with bench_col2:
-            st.markdown("#### ROC-AUC Curve Performance")
+                st.info("System Notification: Confusion matrix image logs currently missing from active workspace paths.")
+        with c2:
             if os.path.exists("roc_curve_comparison.png"):
-                st.image("roc_curve_comparison.png", use_container_width=True)
+                st.image("roc_curve_comparison.png", caption="Model ROC Curve Comparison Blueprint", use_container_width=True)
             else:
-                st.info("ROC comparison graph not found in workspace.")
-
+                st.info("System Notification: ROC performance log charts missing from operational directory layers.")
