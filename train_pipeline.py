@@ -90,7 +90,7 @@ df = df.dropna(subset=["Email Text", "Email Type"])
 df['label'] = df['Email Type'].apply(lambda x: 1 if "phishing" in str(x).lower() else 0)
 
 # To balance training speed and representativeness, we downsample using train_test_split
-SAMPLE_SIZE = min(5000, len(df))
+SAMPLE_SIZE = min(15000, len(df))
 if len(df) > SAMPLE_SIZE:
     _, df = train_test_split(df, test_size=SAMPLE_SIZE, stratify=df['label'], random_state=42)
 
@@ -105,39 +105,61 @@ print("\n")
 print("=== Phase 2: Hybrid Feature Engineering ===")
 
 # A. Extract Structural/Metadata heuristic features
-url_pattern = re.compile(r'https?://\S+|www\.\S+|<a\s+href=')
-df['has_url'] = df['Email Text'].apply(lambda x: 1 if url_pattern.search(x) else 0)
+url_pattern = re.compile(
+    r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
+    re.IGNORECASE
+)
+df['url_count'] = df['Email Text'].apply(lambda x: len(url_pattern.findall(str(x))))
 
-urgency_keywords = ['urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 'restricted', 'security']
+# Suspicious top-level domains & subdomains
+tld_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
+df['has_suspicious_tld'] = df['Email Text'].apply(lambda x: 1 if tld_pattern.search(str(x)) else 0)
+
+# Modern security/MFA lures
+mfa_keywords = ['mfa', '2fa', 'otp', 'authenticator', 'verification code', 'one-time', 'passcode']
+def check_mfa_lure(text):
+    text_lower = str(text).lower()
+    return 1 if any(word in text_lower for word in mfa_keywords) else 0
+df['has_mfa_lure'] = df['Email Text'].apply(check_mfa_lure)
+
+# Expanded urgency and modern corporate brand lures (Invoice, Delivery, Payment, Auth)
+urgency_keywords = [
+    'urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 
+    'restricted', 'security', 'update', 'password', 'confirm', 'attention', 'required', 'login',
+    'unusual', 'activity', 'invoice', 'overdue', 'billing', 'delivery', 'fedex', 'ups', 'paypal', 
+    'crypto', 'wallet', 'authorize', 'deactivate', 'block'
+]
 def count_urgency_keywords(text):
-    text_lower = text.lower()
+    text_lower = str(text).lower()
     return sum(1 for word in urgency_keywords if word in text_lower)
 
 df['urgency_count'] = df['Email Text'].apply(count_urgency_keywords)
-df['email_length'] = df['Email Text'].apply(len)
-df['exclamation_count'] = df['Email Text'].apply(lambda x: x.count('!'))
-df['money_char_count'] = df['Email Text'].apply(lambda x: x.count('$'))
+df['email_length'] = df['Email Text'].apply(lambda x: len(str(x)))
+df['exclamation_count'] = df['Email Text'].apply(lambda x: str(x).count('!'))
+df['money_char_count'] = df['Email Text'].apply(
+    lambda x: str(x).count('$') + str(x).count('€') + str(x).count('£') + 
+              str(x).lower().count('usd') + str(x).lower().count('transfer')
+)
 
 # B. Clean unstructured text column
 print("Preprocessing raw email body text...")
 df['cleaned_text'] = df['Email Text'].apply(preprocess_email)
 
-# C. Text Vectorization (TF-IDF Vectorizer with max 3000 features)
-vectorizer = TfidfVectorizer(max_features=3000)
+# C. Text Vectorization (TF-IDF Vectorizer with max 4000 features)
+vectorizer = TfidfVectorizer(max_features=4000)
 tfidf_features = vectorizer.fit_transform(df['cleaned_text']).toarray()
 tfidf_df = pd.DataFrame(tfidf_features, columns=vectorizer.get_feature_names_out())
 
 # D. Consolidate TF-IDF with engineered structural features
-metadata_cols = ['has_url', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
+metadata_cols = ['url_count', 'has_suspicious_tld', 'has_mfa_lure', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
 metadata_df = df[metadata_cols].reset_index(drop=True)
 
 # Standardize/Scale the non-binary structural columns using MinMaxScaler to ensure values are non-negative (required for MultinomialNB)
 from sklearn.preprocessing import MinMaxScaler
 scaler = MinMaxScaler()
 metadata_scaled = metadata_df.copy()
-metadata_scaled[['urgency_count', 'email_length', 'exclamation_count', 'money_char_count']] = scaler.fit_transform(
-    metadata_df[['urgency_count', 'email_length', 'exclamation_count', 'money_char_count']]
-)
+scale_cols = ['url_count', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
+metadata_scaled[scale_cols] = scaler.fit_transform(metadata_df[scale_cols])
 
 X = pd.concat([tfidf_df, metadata_scaled], axis=1)
 y = df['label'].reset_index(drop=True)
@@ -155,12 +177,12 @@ print("\n")
 print("=== Phase 3: Grid Search Optimization & Model Training ===")
 
 # Tune Random Forest Classifier
-print("Tuning Random Forest via GridSearchCV...")
+print("Tuning Random Forest via GridSearchCV (sequential execution to save resources)...")
 rf_param_grid = {
     'n_estimators': [50, 100],
-    'max_depth': [10, 20, None],
+    'max_depth': [15, None],
 }
-rf_grid = GridSearchCV(RandomForestClassifier(class_weight='balanced', random_state=42), rf_param_grid, cv=3, scoring='f1', n_jobs=-1)
+rf_grid = GridSearchCV(RandomForestClassifier(class_weight='balanced', random_state=42), rf_param_grid, cv=3, scoring='f1', n_jobs=1)
 rf_grid.fit(X_train, y_train)
 best_rf = rf_grid.best_estimator_
 print(f"Optimal Random Forest params: {rf_grid.best_params_}")
