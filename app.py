@@ -198,7 +198,7 @@ if not assets_ready:
     st.error("🚨 Missing System Artifacts: Please run the training pipeline first (`train_pipeline.py`) to generate matching joblib configurations.")
 else:
     # 5. USER WORKSPACE LAYOUT
-    tabs = st.tabs(["✨ Threat Predictor", "📊 System Performance"])
+    tabs = st.tabs(["✨ Threat Predictor", "📊 System Performance", "💡 Security Checklist"])
     
     with tabs[0]:
         email_payload = st.text_area(
@@ -322,3 +322,15 @@ else:
                 st.image("roc_curve_comparison.png", caption="Model ROC Curve Comparison Blueprint", use_container_width=True)
             else:
                 st.info("System Notification: ROC performance log charts missing from operational directory layers.")
+
+    with tabs[2]:
+        st.markdown("<h4 style='color: #a5b4fc; font-size: 1.2rem;'>🛡️ Beyond AI: The Human Firewall Checklist</h4>", unsafe_allow_html=True)
+        st.write("No AI model is 100% foolproof against highly targeted attacks (like spear-phishing or zero-days). Use this checklist to verify indicators outside the raw text:")
+        
+        st.checkbox("✉️ **Verify the Sender's Actual Domain**: Attackers use display name spoofing (e.g., displaying 'Netflix Security' but sending from `admin@netflix-security-update.xyz`). Check the address suffix carefully.")
+        st.checkbox("🔗 **Inspect Hyperlinks (Hover, Don't Click)**: Hover over any links to check where they actually lead. Look for typos or character substitutions (e.g., `micros0ft.com` or `paypa1.com`).")
+        st.checkbox("🔒 **Watch out for High-Risk Actions**: Be extremely skeptical of requests for credential entry, passwords, bank transfers, or MFA codes via email.")
+        st.checkbox("📞 **Use Out-of-Band Verification**: If an email claims to be from a colleague or your bank requesting urgent changes, verify it independently by calling them or messaging them on a known channel.")
+        
+        st.info("💡 **Pro-Tip**: Safe emails never demand that you verify MFA/2FA codes via unencrypted email forms or click direct links to authorize high-security transactions.")
+
