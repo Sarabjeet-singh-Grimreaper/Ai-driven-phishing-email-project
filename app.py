@@ -219,8 +219,34 @@ def preprocess_payload(text):
     text = text.lower()
     text = re.sub(r'<[^>]+>', ' ', text)
     text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)  # normalize whitespace
     tokens = text.split()
     return " ".join([word for word in tokens if word not in STOPWORDS])
+
+def extract_text_from_image(uploaded_file):
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        from PIL import Image
+        import numpy as np
+        
+        # Read file as PIL Image
+        img = Image.open(uploaded_file)
+        # Convert to numpy array
+        img_np = np.array(img)
+        
+        # Initialize RapidOCR engine
+        engine = RapidOCR()
+        result, elapse = engine(img_np)
+        
+        if result:
+            texts = [line[1] for line in result]
+            return "\n".join(texts), None
+        else:
+            return "", "No text detected in the image. Please ensure the image contains clear, readable email text."
+    except ImportError:
+        return "", "OCR library 'rapidocr-onnxruntime' or 'Pillow' is not installed. Run `pip install rapidocr-onnxruntime Pillow` to enable text extraction from screenshots/images."
+    except Exception as e:
+        return "", f"Error reading image: {str(e)}"
 
 # 4. FRONTEND HEADER ARCHITECTURE
 st.markdown('<div class="hero-title">🛡️ AI Phishing Detector</div>', unsafe_allow_html=True)
@@ -233,18 +259,49 @@ else:
     tabs = st.tabs(["✨ Threat Predictor", "📊 System Performance", "💡 Security Checklist"])
     
     with tabs[0]:
-        email_payload = st.text_area(
-            "Email Payload Data Ingestion",
-            placeholder="Paste raw, unstructured email body strings or network text capture records here...",
-            height=200,
+        st.markdown("<h4 style='color: #ffffff; font-size: 1.0rem; text-transform: uppercase; font-weight:600; letter-spacing: 0.05em; margin-bottom: 8px;'>📥 Choose Ingestion Method</h4>", unsafe_allow_html=True)
+        input_method = st.radio(
+            "Choose Ingestion Method",
+            ["Type / Paste Text", "Upload Screenshot / Image"],
+            horizontal=True,
             label_visibility="collapsed"
         )
+        
+        email_payload = ""
+        
+        if input_method == "Type / Paste Text":
+            email_payload = st.text_area(
+                "Email Payload Data Ingestion",
+                placeholder="Paste raw, unstructured email body strings or network text capture records here...",
+                height=200,
+                label_visibility="collapsed"
+            )
+        else:
+            uploaded_file = st.file_uploader(
+                "Upload Email Screenshot or Image", 
+                type=["png", "jpg", "jpeg"], 
+                label_visibility="collapsed"
+            )
+            if uploaded_file is not None:
+                st.image(uploaded_file, caption="Uploaded Email Image", use_container_width=True)
+                with st.spinner("Extracting text from image via OCR engine..."):
+                    extracted_text, err = extract_text_from_image(uploaded_file)
+                    if err:
+                        st.error(err)
+                        email_payload = ""
+                    else:
+                        email_payload = extracted_text
+                        st.success("📝 Text successfully extracted from image!")
+                        with st.expander("🔎 View Extracted Text Payload"):
+                            st.text_area("Extracted Text", value=email_payload, height=150, disabled=True)
+            else:
+                st.info("💡 Upload a screenshot or image of an email to scan it.")
         
         scan_triggered = st.button("Analyze Ingested Payload")
         
         if scan_triggered:
             if not email_payload.strip():
-                st.info("💡 Notification: Paste text patterns inside the main ingestion workspace above before initializing analysis filters.")
+                st.info("💡 Notification: Please paste text patterns or upload an image before initializing analysis filters.")
             else:
                 with st.spinner("Processing local text tokens and vector structures..."):
                     # Feature Mining & Vector Conversion Routine
