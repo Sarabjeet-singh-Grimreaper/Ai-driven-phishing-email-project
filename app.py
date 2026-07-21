@@ -225,26 +225,48 @@ def preprocess_payload(text):
 
 def extract_text_from_image(uploaded_file):
     try:
-        from rapidocr_onnxruntime import RapidOCR
         from PIL import Image
         import numpy as np
         
         # Read file as PIL Image
         img = Image.open(uploaded_file)
-        # Convert to numpy array
+        # Convert to RGB to remove alpha channel transparency/grayscale mode issues
+        img = img.convert("RGB")
         img_np = np.array(img)
         
-        # Initialize RapidOCR engine
-        engine = RapidOCR()
-        result, elapse = engine(img_np)
+        extracted_text = ""
+        ocr_errors = []
         
-        if result:
-            texts = [line[1] for line in result]
-            return "\n".join(texts), None
+        # 1. Try RapidOCR first
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            engine = RapidOCR()
+            result, elapse = engine(img_np)
+            if result:
+                texts = [line[1] for line in result]
+                extracted_text = "\n".join(texts)
+        except Exception as e_rapid:
+            ocr_errors.append(f"RapidOCR error: {str(e_rapid)}")
+            
+        # 2. Try pytesseract as fallback if RapidOCR did not find text
+        if not extracted_text.strip():
+            try:
+                import pytesseract
+                # Attempt to extract text via pytesseract
+                tess_text = pytesseract.image_to_string(img)
+                if tess_text.strip():
+                    extracted_text = tess_text
+            except Exception as e_tess:
+                ocr_errors.append(f"Pytesseract error: {str(e_tess)}")
+                
+        if extracted_text.strip():
+            return extracted_text, None
         else:
-            return "", "No text detected in the image. Please ensure the image contains clear, readable email text."
-    except ImportError:
-        return "", "OCR library 'rapidocr-onnxruntime' or 'Pillow' is not installed. Run `pip install rapidocr-onnxruntime Pillow` to enable text extraction from screenshots/images."
+            err_msg = "No text detected in the image. Please ensure the image contains clear, readable email text."
+            if ocr_errors:
+                err_msg += f" (Diagnostics: {'; '.join(ocr_errors)})"
+            return "", err_msg
+            
     except Exception as e:
         return "", f"Error reading image: {str(e)}"
 
@@ -365,7 +387,7 @@ else:
                     <div class="threat-card-safe">
                         <h4 style="color: #d4ff00; margin-top:0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">✅ LEGITIMATE PATTERN CONFIRMED</h4>
                         <p style="color: #f3f4f6; margin-bottom:0; font-size:0.95rem;">
-                            Ingested sequence matches standard communication parameters. Phishing anomaly threat probability drops below <strong style="color: #d4ff00;">{(1-confidence)*100:.2f}%</strong> validation variance thresholds.
+                            Ingested sequence matches standard communication parameters. Legitimate pattern validation certainty is evaluated at <strong style="color: #d4ff00;">{(1-confidence)*100:.2f}%</strong>.
                         </p>
                     </div>
                     """, unsafe_allow_html=True)
