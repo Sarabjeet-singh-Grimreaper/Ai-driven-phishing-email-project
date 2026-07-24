@@ -1,105 +1,158 @@
-# 🛡️ AI CyberShield: Enterprise Phishing Threat Intelligence & Hybrid ML Platform
+# AI CyberShield - Phishing Threat Intelligence & Detection Platform
 
-[![Live App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ai-driven-phishing-email-project-sarabjeetsingh2448060.streamlit.app/)
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
-[![Framework](https://img.shields.io/badge/framework-Streamlit-FF4B4B.svg)](https://streamlit.io/)
-[![ML Library](https://img.shields.io/badge/library-Scikit--Learn-F7931E.svg)](https://scikit-learn.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+AI CyberShield is an enterprise-grade cybersecurity platform that uses Machine Learning (ML) and Natural Language Processing (NLP) models to detect email phishing threats in real-time. 
 
-An end-to-end, enterprise-grade cybersecurity threat intelligence platform powered by Hybrid Machine Learning. It implements a multi-model analysis approach, combining deep semantic NLP features (TF-IDF) with structural heuristics, raw email routing header analysis, and URL reputation checks to defend against advanced email-based threats.
+The application is built on top of a Next.js (TypeScript, TailwindCSS, Framer Motion) premium frontend and powered by a high-performance FastAPI backend encapsulating trained Scikit-Learn classifiers.
 
-🚀 **Access the Live Portal:** [ai-driven-phishing-email-project-sarabjeetsingh2448060.streamlit.app](https://ai-driven-phishing-email-project-sarabjeetsingh2448060.streamlit.app/)
-
----
-
-## 🚀 Architecture Diagram
+## Architecture & Data Flow
 
 ```mermaid
 graph TD
-    A[Raw Email Ingestion] --> B[Text Input / OCR screenshot]
-    B --> C[Preprocessing & Stopword Filtering]
-    C --> D[Hybrid Feature Engineering]
-    D --> D1[TF-IDF Vectorization]
-    D --> D2[Structural Heuristics: TLD, urgency, links, money]
-    D1 & D2 --> E[Model Inference Layer]
-    E --> F[Best ML Classifier: MLP / Random Forest]
-    F --> G[Explainable AI Lure Breakdown]
-    F --> H[Dynamic Risk Score & Classification]
-    F --> I[Interactive Keyword Highlighting Workspace]
-    I --> J[Threat Intelligence Dashboard & PDF/MD Report]
+    A[Frontend: Next.js + Axios] -->|1. Ingest Email / Image Upload| B[FastAPI Gateway]
+    B -->|2. Run OCR Fallback if Image| C[OCR Ingestion Engine]
+    C -->|3. Extract Text Payload| D[Prediction Pipeline Service]
+    B -->|2. Direct Text Payload| D
+    D -->|4. Text Processing & Custom Heuristics| E[TF-IDF Vectorizer & Scale Heuristics]
+    E -->|5. Predict Probabilities| F[Joblib ML Model Classifier]
+    F -->|6. Compile Results & Highlight Flags| B
+    B -->|7. Return JSON Payload| A
+    B -->|8. Generate Threat PDF| G[ReportLab Compilation]
 ```
 
----
-
-## 💼 Resume-Ready Highlights
-For your CV, LinkedIn, or portfolio site:
-> **Built an AI-powered phishing email detection platform using NLP, TF-IDF, hybrid feature engineering, OCR-based image text extraction, and multiple machine learning models (MLP, Logistic Regression, Random Forest, Naive Bayes), achieving 95.6% accuracy with AUC up to 0.996. Integrated Explainable AI (XAI) risk breakdowns, raw SMTP email header parsers (SPF/DKIM/DMARC), URL reputation checkers, and interactive keyword highlighting to deliver an enterprise-grade cybersecurity dashboard.**
-
----
-
-## 🌟 Key Features
-
-1. **✨ Advanced Hybrid ML Scanner**: Analyzes text payloads using TF-IDF (4000 features) combined with structural heuristics (URL count, urgency keywords, suspicious TLDs, MFA lures, financial markers).
-2. **📸 OCR Character Ingestion**: Users can upload a screenshot of an email (JPEG/PNG). The app decodes character maps using a dual-engine layout (RapidOCR & Pytesseract).
-3. **🧠 Explainable AI (XAI)**: Displays an urgency-to-risk indicator break-down including Urgency Language, Suspicious Links, Credential Request, Financial Lures, and Spoofing Indicators.
-4. **📊 Real-Time Operations Panel**: A live session statistics hub tracking Scanned Emails, Threats Blocked, Safe Emails, and Average Risk Score.
-5. **🛡️ Threat Intel Classification**: Categorizes threat vectors into specific types (e.g. Credential Theft, Business Email Compromise, Invoice Scam, Delivery Scam, MFA Bypass) and auto-identifies target brands (Microsoft, PayPal, Chase, Netflix).
-6. **📧 Routing Header Analyzer**: Inspects raw SMTP routing records. Performs authentication verification checks (SPF, DKIM, DMARC validation) and flags header mismatches.
-7. **🔗 URL Reputation Checker**: Runs static analysis on link patterns to identify unencrypted HTTP protocols, IP address hosts, lookalike brand spoofing, and high-risk TLDs (.xyz, .zip).
-8. **🎨 Cyberpunk Dark Theme UX**: A high-end dark hacker interface designed with neon status gradients, holographic cards, terminal-style logs, and styled interactive elements.
-9. **📥 Downloadable Threat Report**: Instantly packages findings, metadata parameters, risk indices, and defensive suggestions into a downloadable Markdown/HTML format.
-10. **💬 Threat Intelligence Assistant**: A local, offline cybersecurity chatbot responding to queries like *"What is SPF?"* or *"How do I spot spoofed email senders?"*.
+## Tech Stack
+* **Frontend**: Next.js 16, TypeScript, TailwindCSS, Framer Motion, Axios, Recharts, Shadcn/ui.
+* **Backend**: FastAPI, Uvicorn, Pydantic, Joblib, Scikit-Learn, Pandas, NumPy.
+* **OCR Engines**: RapidOCR, Pytesseract, Pillow.
+* **Document Compilation**: ReportLab.
+* **Containers**: Docker, Docker Compose.
 
 ---
 
-## 📁 Repository Map
-
+## Folder Structure
 ```text
-├── Phishing_Email.csv          # Real-world training dataset (~18.6k samples)
-├── train_pipeline.py           # Preprocessing, feature extraction, grid search, and training script
-├── test_predict.py             # Command-line prediction and inference testing utility
-├── app.py                      # Interactive Streamlit frontend dashboard (Upgraded)
-├── project_description_report.md# Academic report detailing guidelines, methodology, and lifecycle
-├── confusion_matrix.png        # Best classifier's performance validation chart
-├── roc_curve_comparison.png    # ROC curves comparing performance metrics across all models
-├── best_phishing_model.joblib  # Serialized Multi-Layer Perceptron (MLP) Neural Network checkpoint
-├── tfidf_vectorizer.joblib     # Serialized TF-IDF text feature extractor
-└── metadata_scaler.joblib      # Serialized MinMaxScaler metadata scaler
+ai-driven-phishing-email-project/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── endpoints.py
+│   │   ├── models/
+│   │   │   └── schemas.py
+│   │   └── services/
+│   │       ├── pdf_generator.py
+│   │       └── prediction_service.py
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+├── ai-phishing-shield/ (Frontend)
+│   ├── app/
+│   ├── components/
+│   │   ├── cards/
+│   │   └── visualization/
+│   ├── services/
+│   │   └── api.ts
+│   ├── Dockerfile
+│   ├── package.json
+│   └── .env.local
+├── best_phishing_model.joblib
+├── tfidf_vectorizer.joblib
+├── metadata_scaler.joblib
+├── docker-compose.yml
+└── README.md
 ```
 
 ---
 
-## ⚙️ Quick Start Installation
+## API Endpoints
 
-### 1. Install Dependencies
-Ensure Python 3.8+ is installed on your system. Run:
-```bash
-pip install -r requirements.txt
+### 1. Ingest Raw Email Body Text
+* **Route**: `POST /api/analyze-email`
+* **Input**:
+```json
+{
+  "email": "Dear PayPal User, please reset your password immediately..."
+}
 ```
-*(Optionally install pytesseract to get additional OCR fallback compatibility).*
+* **Response**:
+```json
+{
+  "prediction": "Phishing",
+  "confidence": 98.4,
+  "risk_score": 96,
+  "attack_type": "Credential Harvesting",
+  "severity": "Critical",
+  "indicators": [
+    "Suspicious URL",
+    "Urgency Language",
+    "Password Request"
+  ],
+  "highlighted_email": "Dear <mark ...>PayPal</mark> User, please reset your <mark ...>password</mark>...",
+  "model": "Random Forest (Tuned)"
+}
+```
 
-### 2. Run the Training Pipeline
-Run the following script to load datasets, engineer features, tune hyper-parameters, and generate model weights:
-```bash
-python train_pipeline.py
-```
+### 2. Ingest Email Screenshot / Image Ingestion
+* **Route**: `POST /api/upload-image`
+* **Input**: Multipart file upload (`file`).
+* **Response**: JSON matching the raw text output.
 
-### 3. Launch the Interactive App
-Start the Streamlit portal locally:
-```bash
-streamlit run app.py
-```
-Open `http://localhost:8501` to view your enterprise-ready cybersecurity dashboard!
+### 3. Fetch Dashboard Analytics Summary
+* **Route**: `GET /api/dashboard`
+* **Response**: Returns statistics for scanned counts, threats blocked, safe counts, accuracy, and best model indicators.
+
+### 4. Fetch Trained ML Benchmarks
+* **Route**: `GET /api/models`
+* **Response**: Comparative arrays for accuracy, recall, precision, ROC-AUC, and production status.
+
+### 5. Fetch Threat PDF Report
+* **Route**: `GET /api/report/{id}/download-pdf`
+* **Response**: Dynamically generated binary PDF stream matching threat credentials.
 
 ---
 
-## 📈 System Benchmarks
+## Local Installation
 
-Model classification results compiled across cross-validation tests on **15,000 stratified samples**:
+### Prerequisites
+* Python 3.10+
+* Node.js 18+
+* Tesseract binary installed (if using Tesseract fallback OCR)
 
-| Model | Accuracy | Phishing Precision | Phishing Recall | F1-Score | ROC-AUC |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Neural Network (MLP)** | **95.6%** | **95.2%** | **94.4%** | **94.8%** | **0.996** |
-| **Random Forest (Tuned)** | 95.1% | 94.8% | 93.9% | 94.3% | 0.993 |
-| **Logistic Regression** | 94.2% | 93.1% | 92.8% | 92.9% | 0.985 |
-| **Naive Bayes (Multinomial)**| 91.8% | 90.2% | 89.5% | 89.8% | 0.968 |
+### Launching the Backend
+1. Go to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install Python packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Start the FastAPI uvicorn daemon:
+   ```bash
+   uvicorn main:app --reload --port 8000
+   ```
+
+### Launching the Next.js Frontend
+1. Go to the frontend directory:
+   ```bash
+   cd ../ai-phishing-shield
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+4. Access the portal at `http://localhost:3000`.
+
+---
+
+## Docker Deployment
+
+To launch the complete application stack (Next.js + FastAPI) inside Docker containers:
+
+```bash
+docker-compose up --build
+```
+* Frontend portal: `http://localhost:3000`
+* Backend API: `http://localhost:8000`
