@@ -23,7 +23,7 @@ graph TD
 * **Frontend**: Next.js 16, TypeScript, TailwindCSS, Framer Motion, Axios, Recharts, Shadcn/ui.
 * **Backend**: FastAPI, Uvicorn, Pydantic, Joblib, Scikit-Learn, Pandas, NumPy.
 * **OCR Engines**: RapidOCR, Pytesseract, Pillow.
-* **Document Compilation**: ReportLab.
+* **Document Compilation**: ReportLab (Dynamic PDF Generation).
 * **Containers**: Docker, Docker Compose.
 
 ---
@@ -45,6 +45,12 @@ ai-driven-phishing-email-project/
 │   └── requirements.txt
 ├── ai-phishing-shield/ (Frontend)
 │   ├── app/
+│   │   ├── dashboard/
+│   │   │   ├── analytics/
+│   │   │   ├── email-scanner/
+│   │   │   ├── models/
+│   │   │   ├── reports/
+│   │   │   └── results/
 │   ├── components/
 │   │   ├── cards/
 │   │   └── visualization/
@@ -156,3 +162,10 @@ docker-compose up --build
 ```
 * Frontend portal: `http://localhost:3000`
 * Backend API: `http://localhost:8000`
+
+---
+
+## Future Scope
+* **Real-time API Scanning**: Add integrations with Microsoft Graph API and Google Workspace API.
+* **Continuous Retraining**: Set up pipelines to continuously retrain the ML model dynamically on quarantined threat data.
+* **Deep Neural Networks**: Support Transformer-based models (like BERT or custom encoders) for context-based urgency detection.
