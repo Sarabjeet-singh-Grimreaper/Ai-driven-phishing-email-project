@@ -6,4 +6,6 @@ joblib
 matplotlib
 seaborn
 rapidocr-onnxruntime
+opencv-python-headless
+pytesseract
 Pillow

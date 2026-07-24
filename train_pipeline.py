@@ -182,7 +182,7 @@ rf_param_grid = {
     'n_estimators': [50, 100],
     'max_depth': [15, None],
 }
-rf_grid = GridSearchCV(RandomForestClassifier(class_weight='balanced', random_state=42), rf_param_grid, cv=3, scoring='f1', n_jobs=1)
+rf_grid = GridSearchCV(RandomForestClassifier(class_weight='balanced', random_state=42), rf_param_grid, cv=3, scoring='f1', n_jobs=-1)
 rf_grid.fit(X_train, y_train)
 best_rf = rf_grid.best_estimator_
 print(f"Optimal Random Forest params: {rf_grid.best_params_}")
