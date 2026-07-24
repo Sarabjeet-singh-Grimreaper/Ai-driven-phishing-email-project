@@ -4,6 +4,9 @@ AI CyberShield is an enterprise-grade cybersecurity platform that uses Machine L
 
 The application is built on top of a Next.js (TypeScript, TailwindCSS, Framer Motion) premium frontend and powered by a high-performance FastAPI backend encapsulating trained Scikit-Learn classifiers.
 
+* **Live Demo (Streamlit Interface)**: [Streamlit Application Portal](https://ai-driven-phishing-email-project-sarabjeetsingh2448060.streamlit.app/)
+
+
 ## Architecture & Data Flow
 
 ```mermaid
