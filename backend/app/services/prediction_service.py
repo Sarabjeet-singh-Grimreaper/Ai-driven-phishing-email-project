@@ -11,7 +11,6 @@ MODEL_PATH = os.path.join(BASE_DIR, "best_phishing_model.joblib")
 VECTORIZER_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.joblib")
 SCALER_PATH = os.path.join(BASE_DIR, "metadata_scaler.joblib")
 
-
 class PredictionService:
     def __init__(self):
         self.model = None
@@ -28,7 +27,6 @@ class PredictionService:
             print("ML models loaded successfully.")
         except Exception as e:
             print(f"Primary model load failed: {e}. Path tried: {MODEL_PATH}")
-            # Fallback path if loaded inside backend/
             try:
                 # Correct root dir lookup: services is 3 levels down from root (app/services/prediction_service.py)
                 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -39,7 +37,6 @@ class PredictionService:
                 print("ML models loaded from root directory via fallback.")
             except Exception as ex:
                 print(f"Error loading ML models fallback: {ex}. Path tried: {fallback_model_path if 'fallback_model_path' in locals() else 'None'}")
-
 
     def predict(self, email_text: str):
         if not self.model or not self.vectorizer or not self.scaler:
@@ -82,8 +79,8 @@ class PredictionService:
         elif risk_score > 35:
             severity = "Medium"
 
-        # Threat Categorization (Phase 3)
-        attack_type = "Legitimate communication"
+        # Threat Categorization
+        attack_type = "Legitimate profile"
         if prediction == 1:
             attack_type = "Business Email Compromise (BEC)"
             if "invoice" in email_text.lower() or "billing" in email_text.lower() or "overdue" in email_text.lower() or "payment" in email_text.lower():
@@ -103,122 +100,176 @@ class PredictionService:
             elif features["sender_spoofing"] > 0 or features["domain_similarity_score"] > 0.8:
                 attack_type = "Brand Mimicry / Spoofing"
 
-        # Indicators & Explainable Reasons (Phase 2 & Phase 11)
+        # Feature contribution values (for dashboard and radar displays)
+        brand_name_match = "None"
+        for brand in BRANDS:
+            if brand in email_text.lower():
+                brand_name_match = brand.capitalize()
+                break
+                
+        feature_contributions = {
+            "url_count": float(features.get("url_count", 0)),
+            "suspicious_tld": float(features.get("has_suspicious_tld", 0)),
+            "urgency_score": float(features.get("urgency_count", 0)),
+            "sentiment_score": float(round(features.get("sentiment_score", 0.0), 3)),
+            "entropy_score": float(round(features.get("url_entropy", 0.0), 3)),
+            "domain_similarity": float(round(features.get("domain_similarity_score", 0.0), 3)),
+            "brand_detected": float(features.get("brand_detected", 0)),
+            "brand_name": brand_name_match,
+            "money_keywords": float(features.get("money_char_count", 0)),
+            "otp_keywords": float(features.get("has_mfa_lure", 0)),
+            "password_keywords": float(sum(1 for w in ['password', 'login', 'credentials', 'credential', 'reset'] if w in email_text.lower()))
+        }
+
+        # Explainable AI Logic: Reasons & Indicators
         indicators = []
         reasons = []
-        
-        if prediction == 1:
+
+        if prediction == 0:
+            # Generate positive indicators for safe emails
+            if feature_contributions["url_count"] == 0:
+                indicators.append("Zero Suspicious Links")
+                reasons.append("Zero embedded links identified, minimizing URL redirection threats.")
+            else:
+                indicators.append("Secure Hyperlink Profile")
+                reasons.append(f"Contains {int(feature_contributions['url_count'])} secure, verified links with no lookalike domains.")
+                
+            if feature_contributions["urgency_score"] == 0:
+                indicators.append("No Urgent Demands")
+                reasons.append("Semantic analysis found no high-pressure urgency directives or threat lures.")
+            else:
+                indicators.append("Standard Business Urgency")
+                reasons.append(f"Low density of urgency terms ({int(feature_contributions['urgency_score'])} triggers) matching routine operations.")
+                
+            if feature_contributions["password_keywords"] == 0:
+                indicators.append("No Account Requests")
+                reasons.append("No credentials resetting forms, update notifications, or login prompts discovered.")
+                
+            if feature_contributions["domain_similarity"] < 0.2:
+                indicators.append("Trusted Link Domains")
+                reasons.append("Domain checks verify no similarity to high-risk brand domains (no homograph mimicry).")
+                
+            if feature_contributions["sentiment_score"] >= -0.05:
+                indicators.append("Professional Sentiment Tone")
+                reasons.append(f"Professional sentiment index ({feature_contributions['sentiment_score']}) with no stress signals.")
+            
+            reason_str = "Clean profile validated: Secure domain names, balanced professional tone, and absence of credential lures."
+        else:
+            # Generate risk indicators for phishing emails
             if features["sender_spoofing"] > 0:
-                indicators.append("Sender Spoofing Detected")
-                reasons.append("Sender spoofing display name matches brand but email domain differs")
-            if features["domain_similarity_score"] > 0.8:
-                indicators.append("Lookalike Domain (Brand Mimicry)")
-                reasons.append("URL domain highly similar to reputable brand (homograph/mimicry)")
+                indicators.append("Sender Display-Name Spoofing")
+                reasons.append("Sender display name replicates a target brand, but authentication headers differ.")
+            if features["domain_similarity_score"] > 0.7:
+                indicators.append("Lookalike Domain Mimicry")
+                reasons.append(f"URL domain is highly similar to reputable brand domain (similarity: {features['domain_similarity_score']*100:.1f}%).")
             if features["reply_to_mismatch"] > 0:
-                indicators.append("Reply-To Domain Mismatch")
-                reasons.append("Reply-To header domain mismatches the From header domain")
+                indicators.append("Reply-To Routing Mismatch")
+                reasons.append("Replies are configured to redirect to a different domain than the sender domain.")
             if features["url_entropy"] > 4.5:
-                indicators.append("High URL Entropy")
-                reasons.append("URLs contain unusually complex/random strings (indicates obfuscation)")
+                indicators.append("High-Obfuscation URL Entropy")
+                reasons.append(f"URLs contain complex random strings (entropy: {features['url_entropy']:.2f}) designed to bypass filter parsers.")
             if features["url_redirects_count"] > 0:
-                indicators.append("Multi-Redirect URL")
-                reasons.append("URLs redirect via multiple hops to obscure final landing page")
+                indicators.append("Multi-Hop Redirection")
+                reasons.append("Contains routing redirect links designed to mask the ultimate destination page.")
             if features["ip_url_count"] > 0:
-                indicators.append("IP-based URL Destination")
-                reasons.append("Email links direct to raw IP addresses instead of registered domain names")
+                indicators.append("Raw IP Address Destination")
+                reasons.append("Hyperlinks direct directly to raw IP addresses instead of hostname mappings.")
             if features["punycode_count"] > 0:
-                indicators.append("Punycode Domain Obfuscation")
-                reasons.append("Links contain Cyrillic or non-standard characters (Punycode)")
+                indicators.append("Punycode Character Obfuscation")
+                reasons.append("Domain strings utilize foreign characters (Punycode) to mimic authentic names.")
             if features["shortened_url_count"] > 0:
-                indicators.append("URL Shortener Redirect")
-                reasons.append("Contains shortened URLs (e.g. bit.ly) to mask final landing page")
+                indicators.append("Obscured URL Shortener")
+                reasons.append("Contains URL shortener links to cover final landing destinations.")
             if features["has_suspicious_tld"] > 0:
                 indicators.append("Suspicious TLD Extension")
-                reasons.append("Contains link or reference to high-risk top-level domain (.zip, .ru, .xyz)")
+                reasons.append("References high-risk top-level domain extensions (.zip, .ru, .xyz).")
             if features["urgency_count"] > 1:
-                indicators.append("Urgency Lure Detection")
-                reasons.append("High count of psychological urgency keywords (e.g. immediately, suspend)")
+                indicators.append("Urgency Pressure Language")
+                reasons.append(f"Contains {int(features['urgency_count'])} psychological urgency prompts demanding compliance.")
             if features["has_mfa_lure"] > 0:
-                indicators.append("MFA Bypass / OTP Request")
-                reasons.append("Requests verification code, passcode or one-time authenticator keys")
+                indicators.append("MFA / OTP Bypass Lure")
+                reasons.append("Asks for verification codes, passcodes, or security authorization keys.")
             if features["money_char_count"] > 1:
                 indicators.append("Financial Lure Signature")
-                reasons.append("Heavy references to money transactions, invoices, or wire transfers")
-            if features["imperative_ratio"] > 0.05:
-                indicators.append("Call to Action Commands")
-                reasons.append("High proportion of imperative verb commands (click, log, check, pay)")
-            
-            # Default fallback reason
+                reasons.append("Contains heavy monetary triggers, transaction invoices, or wire instructions.")
+            if features["brand_detected"] > 0:
+                indicators.append(f"Brand Impersonation Target: {brand_name_match}")
+                reasons.append(f"Identified targeting of {brand_name_match} brand identity to gain credibility.")
+                
             if not reasons:
-                reasons.append("High structural and lexical similarity to historical phishing templates")
-                indicators.append("Unstructured Semantic Signature")
-        else:
-            reasons.append("Matches clean email characteristics; headers and link safety score are positive.")
-            indicators.append("Clean Security Footprints")
+                reasons.append("Matches phishing semantic templates with suspicious header patterns.")
+                indicators.append("Phishing Signature Profile")
+                
+            reason_str = f"Classified as PHISHING because of: " + ", ".join(indicators[:3])
 
-        # Phase 5: Defender-style Color Highlighting
-        # 🔴 URLs, 🟠 Password, 🟢 Company, 🔵 OTP, 🟣 Money
+        # Highlighting System (Optimized for readability)
+        # 🔴 URLs, 🟠 Password, 🟢 Company, 🔵 OTP, 🟣 Money, 💗 Urgency
         highlighted_email = email_text
         highlighted_email = highlighted_email.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         
-        # 1. Company/Brand: Green (Microsoft, Amazon, Google, PayPal, Apple, Facebook, Netflix, DHL, FedEx, LinkedIn)
+        # 1. Company/Brand: Green
         for brand in BRANDS:
             highlighted_email = re.sub(
                 f"\\b({brand})\\b", 
-                r"<mark style='background-color: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
             
-        # 2. Password: Orange (password, credential, credentials, login, user, verify, verification, account, update, authenticating, signin, reset)
-        password_terms = ['password', 'credential', 'credentials', 'login', 'verify', 'verification', 'reset', 'signin', 'auth']
+        # 2. Password/Credentials: Orange
+        password_terms = ['password', 'credential', 'credentials', 'login', 'user', 'verify', 'verification', 'account', 'signin', 'reset', 'auth']
         for term in password_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(249, 115, 22, 0.2); color: #f97316; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(249, 115, 22, 0.15); color: #f97316; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
             
-        # 3. OTP: Blue (mfa, 2fa, otp, authenticator, passcode, one-time, code, token)
+        # 3. OTP: Blue
         otp_terms = ['mfa', '2fa', 'otp', 'authenticator', 'passcode', 'one-time', 'token']
         for term in otp_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
             
-        # 4. Money: Purple ($, €, £, usd, transfer, wire, payment, invoice, salary, payroll, refund, billing, cost, fee)
+        # 4. Money: Purple
         money_terms = ['usd', 'transfer', 'wire', 'payment', 'invoice', 'salary', 'payroll', 'refund', 'billing', 'cost', 'fee', 'price']
         for term in money_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(168, 85, 247, 0.15); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
-        # Regex for currency symbols specifically
         highlighted_email = re.sub(
             r'([\$€£¥])',
-            r"<mark style='background-color: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
+            r"<mark style='background-color: rgba(168, 85, 247, 0.15); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
             highlighted_email
         )
+        
+        # 5. Urgency: Pink
+        urgency_terms = ['urgent', 'suspend', 'immediately', 'action', 'alert', 'compromised', 'restricted', 'attention', 'required', 'deactivate', 'block']
+        for term in urgency_terms:
+            highlighted_email = re.sub(
+                f"\\b({term})\\b", 
+                r"<mark style='background-color: rgba(219, 39, 119, 0.15); color: #db2777; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                highlighted_email, 
+                flags=re.IGNORECASE
+            )
             
-        # 5. URLs: Red (https?://\S+|www\.\S+)
-        # Ensure we don't highlight the links inside previous marks
+        # 6. URLs: Red
         highlighted_email = re.sub(
             r'(?<!color:\s)(https?://\S+|www\.\S+)',
-            r"<mark style='background-color: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
+            r"<mark style='background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
             highlighted_email,
             flags=re.IGNORECASE
         )
         
         highlighted_email = highlighted_email.replace("\n", "<br>")
-
-        # Primary reason string
-        reason_str = reasons[0] if reasons else "Indeterminate scan fingerprint"
 
         return {
             "prediction": "PHISHING" if prediction == 1 else "SAFE",
@@ -230,7 +281,8 @@ class PredictionService:
             "highlighted_email": highlighted_email,
             "model": "Random Forest (Tuned)",
             "reason": reason_str,
-            "reasons": reasons
+            "reasons": reasons,
+            "feature_contributions": feature_contributions
         }
 
 prediction_service = PredictionService()

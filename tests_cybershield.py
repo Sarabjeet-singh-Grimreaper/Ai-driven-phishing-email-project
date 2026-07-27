@@ -45,7 +45,7 @@ class TestCyberShieldPipeline(unittest.TestCase):
         
         self.assertEqual(result["prediction"], "PHISHING")
         self.assertGreater(result["confidence"], 50.0)
-        self.assertIn("Lookalike Domain (Brand Mimicry)", result["indicators"])
+        self.assertIn("Lookalike Domain Mimicry", result["indicators"])
         self.assertEqual(result["severity"], "High")
         
         # Predict on a clean email

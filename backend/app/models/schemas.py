@@ -15,3 +15,4 @@ class AnalysisResponse(BaseModel):
     model: str
     reason: Optional[str] = None
     reasons: Optional[List[str]] = []
+    feature_contributions: Optional[dict] = None
