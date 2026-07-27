@@ -3,33 +3,21 @@ import re
 import joblib
 import pandas as pd
 import numpy as np
+from app.services.pipeline_utils import EmailFeatureExtractor, preprocess_text, BRANDS
 
 # Resolve model path relative to project root
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODEL_PATH = os.path.join(BASE_DIR, "best_phishing_model.joblib")
 VECTORIZER_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.joblib")
 SCALER_PATH = os.path.join(BASE_DIR, "metadata_scaler.joblib")
 
-STOPWORDS = {
-    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", 
-    "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", 
-    "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", 
-    "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", 
-    "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
-    "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", 
-    "with", "about", "against", "between", "into", "through", "during", "before", "after", 
-    "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", 
-    "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", 
-    "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", 
-    "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", 
-    "should", "now"
-}
 
 class PredictionService:
     def __init__(self):
         self.model = None
         self.vectorizer = None
         self.scaler = None
+        self.extractor = EmailFeatureExtractor()
         self.load_models()
 
     def load_models(self):
@@ -39,76 +27,43 @@ class PredictionService:
             self.scaler = joblib.load(SCALER_PATH)
             print("ML models loaded successfully.")
         except Exception as e:
-            print(f"Error loading ML models: {e}")
+            print(f"Primary model load failed: {e}. Path tried: {MODEL_PATH}")
+            # Fallback path if loaded inside backend/
+            try:
+                # Correct root dir lookup: services is 3 levels down from root (app/services/prediction_service.py)
+                ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                fallback_model_path = os.path.join(ROOT_DIR, "best_phishing_model.joblib")
+                self.model = joblib.load(fallback_model_path)
+                self.vectorizer = joblib.load(os.path.join(ROOT_DIR, "tfidf_vectorizer.joblib"))
+                self.scaler = joblib.load(os.path.join(ROOT_DIR, "metadata_scaler.joblib"))
+                print("ML models loaded from root directory via fallback.")
+            except Exception as ex:
+                print(f"Error loading ML models fallback: {ex}. Path tried: {fallback_model_path if 'fallback_model_path' in locals() else 'None'}")
 
-    def preprocess_payload(self, text: str) -> str:
-        if not isinstance(text, str):
-            return ""
-        text = text.lower()
-        text = re.sub(r'<[^>]+>', ' ', text)
-        text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-        text = re.sub(r'\s+', ' ', text)
-        tokens = text.split()
-        return " ".join([word for word in tokens if word not in STOPWORDS])
-
-    def parse_heuristics(self, email_text: str):
-        # Heuristics Calculations
-        url_pattern = re.compile(
-            r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
-            re.IGNORECASE
-        )
-        url_count = len(url_pattern.findall(email_text))
-        
-        tld_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
-        has_suspicious_tld = 1 if tld_pattern.search(email_text) else 0
-
-        mfa_keywords = ['mfa', '2fa', 'otp', 'authenticator', 'verification code', 'one-time', 'passcode']
-        has_mfa_lure = 1 if any(word in email_text.lower() for word in mfa_keywords) else 0
-
-        urgency_keywords = [
-            'urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 
-            'restricted', 'security', 'update', 'password', 'confirm', 'attention', 'required', 'login',
-            'unusual', 'activity', 'invoice', 'overdue', 'billing', 'delivery', 'fedex', 'ups', 'paypal', 
-            'crypto', 'wallet', 'authorize', 'deactivate', 'block'
-        ]
-        urgency_count = sum(1 for word in urgency_keywords if word in email_text.lower())
-        email_length = len(email_text)
-        exclamation_count = email_text.count('!')
-        money_char_count = email_text.count('$') + email_text.count('€') + email_text.count('£') + email_text.lower().count('usd') + email_text.lower().count('transfer')
-        
-        return {
-            "url_count": url_count,
-            "has_suspicious_tld": has_suspicious_tld,
-            "has_mfa_lure": has_mfa_lure,
-            "urgency_count": urgency_count,
-            "email_length": email_length,
-            "exclamation_count": exclamation_count,
-            "money_char_count": money_char_count
-        }
 
     def predict(self, email_text: str):
         if not self.model or not self.vectorizer or not self.scaler:
-            raise RuntimeError("Model services are not initialized.")
+            raise RuntimeError("Model services are not fully initialized. Please run training pipeline first.")
 
-        cleaned_body = self.preprocess_payload(email_text)
-        features = self.parse_heuristics(email_text)
+        # Input Validation
+        if not email_text or not email_text.strip():
+            raise ValueError("Input email text is empty.")
+            
+        cleaned_body = preprocess_text(email_text)
         
-        meta_df = pd.DataFrame([{
-            'url_count': features['url_count'],
-            'has_suspicious_tld': features['has_suspicious_tld'],
-            'has_mfa_lure': features['has_mfa_lure'],
-            'urgency_count': features['urgency_count'], 
-            'email_length': features['email_length'],
-            'exclamation_count': features['exclamation_count'], 
-            'money_char_count': features['money_char_count']
-        }])
+        # Extract features using shared utility
+        features_df = self.extractor.transform([email_text])
+        features = features_df.iloc[0].to_dict()
         
-        scale_cols = ['url_count', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
-        meta_df[scale_cols] = self.scaler.transform(meta_df[scale_cols])
+        # Transform for scikit-learn model
+        meta_df = features_df.copy()
+        
+        # Scale features using the fitted scaler
+        meta_scaled = pd.DataFrame(self.scaler.transform(meta_df), columns=meta_df.columns)
         
         tfidf_feat = self.vectorizer.transform([cleaned_body]).toarray()
         tfidf_df = pd.DataFrame(tfidf_feat, columns=self.vectorizer.get_feature_names_out())
-        X_final = pd.concat([tfidf_df, meta_df], axis=1)
+        X_final = pd.concat([tfidf_df, meta_scaled], axis=1)
         
         prediction = int(self.model.predict(X_final)[0])
         confidence = float(self.model.predict_proba(X_final)[0][1]) if hasattr(self.model, "predict_proba") else 0.5
@@ -117,74 +72,165 @@ class PredictionService:
         if prediction == 0:
             risk_score = max(5, int((1 - confidence) * 30))
         else:
-            risk_score = max(55, int(confidence * 100))
+            risk_score = max(50, int(confidence * 100))
             
         severity = "Low"
         if risk_score > 85:
             severity = "Critical"
-        elif risk_score > 60:
+        elif risk_score > 65:
             severity = "High"
-        elif risk_score > 30:
+        elif risk_score > 35:
             severity = "Medium"
 
-        # Indicators
-        indicators = []
-        if features['url_count'] > 0:
-            indicators.append("Suspicious URL")
-        if features['urgency_count'] > 1:
-            indicators.append("Urgency Language")
-        if "password" in email_text.lower() or "login" in email_text.lower():
-            indicators.append("Password Request")
-        if features['has_suspicious_tld']:
-            indicators.append("Suspicious TLD Extension")
-        if features['has_mfa_lure']:
-            indicators.append("MFA Bypass Attempt")
-        if features['money_char_count'] > 0:
-            indicators.append("Financial Lure")
+        # Threat Categorization (Phase 3)
+        attack_type = "Legitimate communication"
+        if prediction == 1:
+            attack_type = "Business Email Compromise (BEC)"
+            if "invoice" in email_text.lower() or "billing" in email_text.lower() or "overdue" in email_text.lower() or "payment" in email_text.lower():
+                attack_type = "Invoice Fraud"
+            elif "password" in email_text.lower() or "login" in email_text.lower() or "credentials" in email_text.lower() or "credential" in email_text.lower():
+                attack_type = "Credential Theft"
+            elif "delivery" in email_text.lower() or "fedex" in email_text.lower() or "dhl" in email_text.lower() or "ups" in email_text.lower() or "shipping" in email_text.lower():
+                attack_type = "Delivery Scam"
+            elif "crypto" in email_text.lower() or "wallet" in email_text.lower() or "bitcoin" in email_text.lower() or "ethereum" in email_text.lower():
+                attack_type = "Crypto Scam"
+            elif "bank" in email_text.lower() or "transfer" in email_text.lower() or "wire" in email_text.lower() or "account" in email_text.lower():
+                attack_type = "Bank Scam"
+            elif "tax" in email_text.lower() or "irs" in email_text.lower() or "refund" in email_text.lower():
+                attack_type = "Tax Scam"
+            elif "hr" in email_text.lower() or "salary" in email_text.lower() or "payroll" in email_text.lower() or "benefits" in email_text.lower() or "leave" in email_text.lower():
+                attack_type = "HR Scam"
+            elif features["sender_spoofing"] > 0 or features["domain_similarity_score"] > 0.8:
+                attack_type = "Brand Mimicry / Spoofing"
 
-        # Highlighted Email Source
+        # Indicators & Explainable Reasons (Phase 2 & Phase 11)
+        indicators = []
+        reasons = []
+        
+        if prediction == 1:
+            if features["sender_spoofing"] > 0:
+                indicators.append("Sender Spoofing Detected")
+                reasons.append("Sender spoofing display name matches brand but email domain differs")
+            if features["domain_similarity_score"] > 0.8:
+                indicators.append("Lookalike Domain (Brand Mimicry)")
+                reasons.append("URL domain highly similar to reputable brand (homograph/mimicry)")
+            if features["reply_to_mismatch"] > 0:
+                indicators.append("Reply-To Domain Mismatch")
+                reasons.append("Reply-To header domain mismatches the From header domain")
+            if features["url_entropy"] > 4.5:
+                indicators.append("High URL Entropy")
+                reasons.append("URLs contain unusually complex/random strings (indicates obfuscation)")
+            if features["url_redirects_count"] > 0:
+                indicators.append("Multi-Redirect URL")
+                reasons.append("URLs redirect via multiple hops to obscure final landing page")
+            if features["ip_url_count"] > 0:
+                indicators.append("IP-based URL Destination")
+                reasons.append("Email links direct to raw IP addresses instead of registered domain names")
+            if features["punycode_count"] > 0:
+                indicators.append("Punycode Domain Obfuscation")
+                reasons.append("Links contain Cyrillic or non-standard characters (Punycode)")
+            if features["shortened_url_count"] > 0:
+                indicators.append("URL Shortener Redirect")
+                reasons.append("Contains shortened URLs (e.g. bit.ly) to mask final landing page")
+            if features["has_suspicious_tld"] > 0:
+                indicators.append("Suspicious TLD Extension")
+                reasons.append("Contains link or reference to high-risk top-level domain (.zip, .ru, .xyz)")
+            if features["urgency_count"] > 1:
+                indicators.append("Urgency Lure Detection")
+                reasons.append("High count of psychological urgency keywords (e.g. immediately, suspend)")
+            if features["has_mfa_lure"] > 0:
+                indicators.append("MFA Bypass / OTP Request")
+                reasons.append("Requests verification code, passcode or one-time authenticator keys")
+            if features["money_char_count"] > 1:
+                indicators.append("Financial Lure Signature")
+                reasons.append("Heavy references to money transactions, invoices, or wire transfers")
+            if features["imperative_ratio"] > 0.05:
+                indicators.append("Call to Action Commands")
+                reasons.append("High proportion of imperative verb commands (click, log, check, pay)")
+            
+            # Default fallback reason
+            if not reasons:
+                reasons.append("High structural and lexical similarity to historical phishing templates")
+                indicators.append("Unstructured Semantic Signature")
+        else:
+            reasons.append("Matches clean email characteristics; headers and link safety score are positive.")
+            indicators.append("Clean Security Footprints")
+
+        # Phase 5: Defender-style Color Highlighting
+        # 🔴 URLs, 🟠 Password, 🟢 Company, 🔵 OTP, 🟣 Money
         highlighted_email = email_text
         highlighted_email = highlighted_email.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         
-        # Urgency
-        for term in ['urgent', 'suspend', 'verify', 'immediately', 'action', 'alert', 'compromised', 'restricted', 'password', 'login']:
+        # 1. Company/Brand: Green (Microsoft, Amazon, Google, PayPal, Apple, Facebook, Netflix, DHL, FedEx, LinkedIn)
+        for brand in BRANDS:
             highlighted_email = re.sub(
-                f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(255, 0, 127, 0.2); color: #ff007f; padding: 2px 4px; border-radius: 4px;'>\1</mark>", 
+                f"\\b({brand})\\b", 
+                r"<mark style='background-color: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
-        # URLs
+            
+        # 2. Password: Orange (password, credential, credentials, login, user, verify, verification, account, update, authenticating, signin, reset)
+        password_terms = ['password', 'credential', 'credentials', 'login', 'verify', 'verification', 'reset', 'signin', 'auth']
+        for term in password_terms:
+            highlighted_email = re.sub(
+                f"\\b({term})\\b", 
+                r"<mark style='background-color: rgba(249, 115, 22, 0.2); color: #f97316; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                highlighted_email, 
+                flags=re.IGNORECASE
+            )
+            
+        # 3. OTP: Blue (mfa, 2fa, otp, authenticator, passcode, one-time, code, token)
+        otp_terms = ['mfa', '2fa', 'otp', 'authenticator', 'passcode', 'one-time', 'token']
+        for term in otp_terms:
+            highlighted_email = re.sub(
+                f"\\b({term})\\b", 
+                r"<mark style='background-color: rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                highlighted_email, 
+                flags=re.IGNORECASE
+            )
+            
+        # 4. Money: Purple ($, €, £, usd, transfer, wire, payment, invoice, salary, payroll, refund, billing, cost, fee)
+        money_terms = ['usd', 'transfer', 'wire', 'payment', 'invoice', 'salary', 'payroll', 'refund', 'billing', 'cost', 'fee', 'price']
+        for term in money_terms:
+            highlighted_email = re.sub(
+                f"\\b({term})\\b", 
+                r"<mark style='background-color: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                highlighted_email, 
+                flags=re.IGNORECASE
+            )
+        # Regex for currency symbols specifically
         highlighted_email = re.sub(
-            r'(https?://\S+|www\.\S+)',
-            r"<mark style='background-color: rgba(0, 242, 254, 0.2); color: #00f2fe; padding: 2px 4px; border-radius: 4px;'>\1</mark>",
+            r'([\$€£¥])',
+            r"<mark style='background-color: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
+            highlighted_email
+        )
+            
+        # 5. URLs: Red (https?://\S+|www\.\S+)
+        # Ensure we don't highlight the links inside previous marks
+        highlighted_email = re.sub(
+            r'(?<!color:\s)(https?://\S+|www\.\S+)',
+            r"<mark style='background-color: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
             highlighted_email,
             flags=re.IGNORECASE
         )
-        # Financial
-        for term in ['\\$', '€', '£', 'usd', 'transfer', 'wire', 'payment', 'invoice']:
-            highlighted_email = re.sub(
-                f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(249, 115, 22, 0.2); color: #f97316; padding: 2px 4px; border-radius: 4px;'>\1</mark>", 
-                highlighted_email, 
-                flags=re.IGNORECASE
-            )
         
         highlighted_email = highlighted_email.replace("\n", "<br>")
 
-        attack_type = "Credential Harvesting" if "Password Request" in indicators else "Brand Mimicry"
-        if "Financial Lure" in indicators:
-            attack_type = "Business Email Compromise (BEC)"
+        # Primary reason string
+        reason_str = reasons[0] if reasons else "Indeterminate scan fingerprint"
 
         return {
-            "prediction": "Phishing" if prediction == 1 else "Safe",
+            "prediction": "PHISHING" if prediction == 1 else "SAFE",
             "confidence": round(confidence * 100, 2) if prediction == 1 else round((1 - confidence) * 100, 2),
             "risk_score": risk_score,
-            "attack_type": attack_type if prediction == 1 else "Legitimate Profile",
+            "attack_type": attack_type,
             "severity": severity,
-            "indicators": indicators if prediction == 1 else ["Clean Email Body Signature"],
+            "indicators": indicators,
             "highlighted_email": highlighted_email,
-            "model": "Random Forest (Tuned)"
+            "model": "Random Forest (Tuned)",
+            "reason": reason_str,
+            "reasons": reasons
         }
 
 prediction_service = PredictionService()

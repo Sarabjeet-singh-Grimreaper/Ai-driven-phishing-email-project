@@ -1,11 +1,16 @@
 import os
 import re
+import sys
 import pandas as pd
 import numpy as np
 import streamlit as st
 import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+from app.services.prediction_service import prediction_service
+
 
 # 1. PAGE SETUP WITH MODERN CYBERSECURITY THEME CONFIGURATION
 st.set_page_config(
@@ -486,86 +491,37 @@ else:
             st.markdown("<h4 style='color: #00f2fe; margin-bottom: 12px;'>📊 Threat Analysis Dashboard</h4>", unsafe_allow_html=True)
             
             if scan_triggered and email_payload.strip():
-                # Process inputs
-                cleaned_body = preprocess_payload(email_payload)
-                
-                # Heuristics Calculations
-                url_pattern = re.compile(
-                    r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
-                    re.IGNORECASE
-                )
-                url_count = len(url_pattern.findall(email_payload))
-                
-                tld_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
-                has_suspicious_tld = 1 if tld_pattern.search(email_payload) else 0
-
-                mfa_keywords = ['mfa', '2fa', 'otp', 'authenticator', 'verification code', 'one-time', 'passcode']
-                has_mfa_lure = 1 if any(word in email_payload.lower() for word in mfa_keywords) else 0
-
-                urgency_keywords = [
-                    'urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 
-                    'restricted', 'security', 'update', 'password', 'confirm', 'attention', 'required', 'login',
-                    'unusual', 'activity', 'invoice', 'overdue', 'billing', 'delivery', 'fedex', 'ups', 'paypal', 
-                    'crypto', 'wallet', 'authorize', 'deactivate', 'block'
-                ]
-                urgency_count = sum(1 for word in urgency_keywords if word in email_payload.lower())
-                email_length = len(email_payload)
-                exclamation_count = email_payload.count('!')
-                money_char_count = email_payload.count('$') + email_payload.count('€') + email_payload.count('£') + email_payload.lower().count('usd') + email_payload.lower().count('transfer')
-                
-                meta_df = pd.DataFrame([{
-                    'url_count': url_count,
-                    'has_suspicious_tld': has_suspicious_tld,
-                    'has_mfa_lure': has_mfa_lure,
-                    'urgency_count': urgency_count, 
-                    'email_length': email_length,
-                    'exclamation_count': exclamation_count, 
-                    'money_char_count': money_char_count
-                }])
-                
-                scale_cols = ['url_count', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
-                meta_df[scale_cols] = scaler.transform(meta_df[scale_cols])
-                
-                tfidf_feat = vectorizer.transform([cleaned_body]).toarray()
-                tfidf_df = pd.DataFrame(tfidf_feat, columns=vectorizer.get_feature_names_out())
-                X_final = pd.concat([tfidf_df, meta_df], axis=1)
-                
-                prediction = model.predict(X_final)[0]
-                confidence = model.predict_proba(X_final)[0][1] if hasattr(model, "predict_proba") else 0.5
-                
-                # Risk Score Calculation (0 to 100 scale)
-                risk_score = int(confidence * 100) if prediction == 1 else int((1 - confidence) * 100)
-                # Ensure appropriate scaling
-                if prediction == 0:
-                    risk_score = max(5, int((1 - confidence) * 30))  # Ham scores are lower
-                else:
-                    risk_score = max(55, int(confidence * 100))  # Phishing scores are higher
-                
-                # Risk level categorization
-                if risk_score <= 30:
-                    risk_label = "Low"
-                    risk_color = "#39ff14"
-                    risk_class = "safe"
-                elif risk_score <= 60:
-                    risk_label = "Medium"
-                    risk_color = "#ffbf00"
-                    risk_class = ""
-                elif risk_score <= 85:
-                    risk_label = "High"
-                    risk_color = "#f97316"
-                    risk_class = ""
-                else:
-                    risk_label = "Critical"
-                    risk_color = "#ff007f"
-                    risk_class = "danger"
-                
-                # Increment stats dynamically
-                st.session_state.scanned_count += 1
-                if prediction == 1:
-                    st.session_state.threats_blocked += 1
-                else:
-                    st.session_state.safe_emails += 1
-                st.session_state.avg_confidence = round(((st.session_state.avg_confidence * (st.session_state.scanned_count - 1)) + risk_score) / st.session_state.scanned_count, 1)
+                with st.spinner("Executing CyberShield threat analysis..."):
+                    # Delegate to prediction service
+                    result = prediction_service.predict(email_payload)
+                    
+                    prediction = 1 if result["prediction"] == "PHISHING" else 0
+                    confidence = result["confidence"] / 100.0
+                    risk_score = result["risk_score"]
+                    severity = result["severity"]
+                    attack_type = result["attack_type"]
+                    reason = result["reason"]
+                    reasons = result["reasons"]
+                    indicators = result["indicators"]
+                    highlighted_output = result["highlighted_email"]
+                    
+                    risk_label = severity
+                    if risk_label == "Low":
+                        risk_color = "#39ff14"
+                    elif risk_label == "Medium":
+                        risk_color = "#ffbf00"
+                    elif risk_label == "High":
+                        risk_color = "#f97316"
+                    else:
+                        risk_color = "#ff007f"
+                        
+                    # Increment stats dynamically
+                    st.session_state.scanned_count += 1
+                    if prediction == 1:
+                        st.session_state.threats_blocked += 1
+                    else:
+                        st.session_state.safe_emails += 1
+                    st.session_state.avg_confidence = round(((st.session_state.avg_confidence * (st.session_state.scanned_count - 1)) + risk_score) / st.session_state.scanned_count, 1)
 
                 # Threat Pipeline Step Highlighted
                 st.markdown("""
@@ -586,7 +542,7 @@ else:
                 if prediction == 1:
                     st.markdown(f"""
                     <div class="cyber-card-danger">
-                        <h3 style="color: #ff007f; margin-top:0; font-weight: 800; letter-spacing: -0.01em;">⚠️ THREAT DETECTED: PHISHING INSTANCE</h3>
+                        <h3 style="color: #ff007f; margin-top:0; font-weight: 800; letter-spacing: -0.01em;">⚠️ THREAT DETECTED: {result["prediction"]}</h3>
                         <p style="color: #fda4af; margin-bottom: 15px; font-size: 0.95rem;">
                             Our Hybrid ML model flagged this email as high-risk with <strong>{confidence*100:.1f}%</strong> neural network confidence.
                         </p>
@@ -597,7 +553,7 @@ else:
                     <div class="cyber-card-success">
                         <h3 style="color: #39ff14; margin-top:0; font-weight: 800; letter-spacing: -0.01em;">🟢 LEGITIMATE EMAIL PROFILE</h3>
                         <p style="color: #d1fae5; margin-bottom: 15px; font-size: 0.95rem;">
-                            No malicious footprints identified. The email is rated clean with <strong>{(1-confidence)*100:.1f}%</strong> safety confidence.
+                            No malicious footprints identified. The email is rated clean with <strong>{confidence*100:.1f}%</strong> safety confidence.
                         </p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -619,145 +575,22 @@ else:
                 # Threat Intelligence details
                 with r_col2:
                     st.markdown("#### 🔎 Threat Intelligence")
-                    
-                    # Heuristically classify the Phishing Type
-                    phishing_type = "N/A - Legitimate Email"
-                    target_brand = "General Target / Unknown"
-                    
-                    if prediction == 1:
-                        payload_lower = email_payload.lower()
-                        # Categorize brand
-                        brands = {
-                            "microsoft": "Microsoft 365 / Office",
-                            "outlook": "Microsoft Outlook",
-                            "paypal": "PayPal Inc.",
-                            "google": "Google Accounts",
-                            "netflix": "Netflix Service",
-                            "chase": "Chase Bank",
-                            "amazon": "Amazon Web Services / Shopping",
-                            "fedex": "FedEx Delivery",
-                            "ups": "UPS Shipping",
-                            "docusign": "DocuSign Portal"
-                        }
-                        for b_key, b_val in brands.items():
-                            if b_key in payload_lower:
-                                target_brand = b_val
-                                break
-                        
-                        # Categorize threat type
-                        if any(w in payload_lower for w in ["password", "reset", "login", "credentials", "verify"]):
-                            phishing_type = "Credential Theft"
-                        elif any(w in payload_lower for w in ["wire", "transfer", "ceo", "invoice", "bank"]):
-                            phishing_type = "Business Email Compromise (BEC)"
-                        elif any(w in payload_lower for w in ["invoice", "receipt", "payment due", "overdue"]):
-                            phishing_type = "Invoice / Billing Scam"
-                        elif any(w in payload_lower for w in ["package", "delivery", "fedex", "ups", "shipment"]):
-                            phishing_type = "Package Delivery Scam"
-                        elif any(w in payload_lower for w in ["mfa", "2fa", "otp", "code", "authenticator"]):
-                            phishing_type = "MFA Bypass Phishing"
-                        else:
-                            phishing_type = "Brand Mimicry Phishing"
-                    
-                    st.markdown(f"**Attack Classification:** `{phishing_type}`")
-                    st.markdown(f"**Indicated Target:** `{target_brand}`")
-                    
+                    st.markdown(f"**Attack Classification:** `{attack_type}`")
+                    st.markdown(f"**Primary Detection Reason:** `{reason}`")
                     st.markdown("**Security Techniques Identified:**")
-                    techniques = []
-                    if url_count > 0:
-                        techniques.append("✓ URL Obfuscation / Redirect Hooks")
-                    if has_suspicious_tld:
-                        techniques.append("✓ Suspicious Top-Level Domain Extension (.xyz, .info, .zip etc)")
-                    if urgency_count > 2:
-                        techniques.append("✓ Urgency Pressure Language")
-                    if has_mfa_lure:
-                        techniques.append("✓ Multi-Factor Bypass / Authentication Scam")
-                    if money_char_count > 2:
-                        techniques.append("✓ Financial Lure / Bank Wire Bait")
-                    
-                    if not techniques:
-                        techniques.append("No common phishing heuristic techniques detected.")
-                    
-                    for tech in techniques:
-                        st.markdown(f"<span style='color: #00f2fe; font-size: 0.85rem;'>{tech}</span>", unsafe_allow_html=True)
+                    if indicators:
+                        for tech in indicators:
+                            st.markdown(f"<span style='color: #00f2fe; font-size: 0.85rem;'>✓ {tech}</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<span style='color: #94a3b8; font-size: 0.85rem;'>No common phishing heuristic techniques detected.</span>", unsafe_allow_html=True)
 
                 # Explainable AI progress bars
                 st.markdown("<br>#### 🧠 Risk Factors Breakdown (Explainable AI)", unsafe_allow_html=True)
+                for index, r_desc in enumerate(reasons):
+                    st.markdown(f"• {r_desc}")
                 
-                # Risk calculation ratios
-                rf_urgency = min(100, int((urgency_count / 5) * 100))
-                rf_links = min(100, int((url_count / 4) * 100))
-                rf_credentials = 95 if any(x in email_payload.lower() for x in ["password", "login", "credentials", "verify", "account"]) else 15
-                rf_financial = min(100, int((money_char_count / 4) * 100))
-                rf_spoofing = 85 if (has_suspicious_tld or has_mfa_lure) else 10
-                
-                st.markdown(f"Urgency Language ({rf_urgency}%)")
-                st.progress(rf_urgency / 100)
-                st.markdown(f"Suspicious Links ({rf_links}%)")
-                st.progress(rf_links / 100)
-                st.markdown(f"Credential Request ({rf_credentials}%)")
-                st.progress(rf_credentials / 100)
-                st.markdown(f"Financial Bait ({rf_financial}%)")
-                st.progress(rf_financial / 100)
-                st.markdown(f"Spoofing Indicators ({rf_spoofing}%)")
-                st.progress(rf_spoofing / 100)
-
-                # SHAP TF-IDF Feature Importance
-                st.markdown("<br>#### 📌 Top Feature Coefficients (SHAP-like Importance)", unsafe_allow_html=True)
-                # Compute term TF-IDF from the vectorizer features
-                tfidf_tokens = cleaned_body.split()
-                feature_names = list(vectorizer.get_feature_names_out())
-                words_found = []
-                for token in set(tfidf_tokens):
-                    if token in feature_names:
-                        idx = feature_names.index(token)
-                        # Estimate mock/simple weights based on TF-IDF relevance
-                        weight = float(tfidf_feat[0][idx] * 0.5)
-                        if prediction == 1:
-                            if token in ["verify", "password", "login", "update", "account", "security", "urgent"]:
-                                weight += 0.3
-                        words_found.append((token, round(weight, 3)))
-                
-                words_found = sorted(words_found, key=lambda x: x[1], reverse=True)[:5]
-                if words_found:
-                    cols_shap = st.columns(len(words_found))
-                    for i, (word, score) in enumerate(words_found):
-                        cols_shap[i].metric(label=f"Word: '{word}'", value=f"+{score}")
-                else:
-                    st.info("No high-importance TF-IDF terms matched feature vector dictionaries.")
-
                 # Interactive Semantic Highlighting Display
                 st.markdown("<br>#### 🗺️ Interactive Segment Color-Coding Highlighting", unsafe_allow_html=True)
-                highlighted_output = email_payload
-                highlighted_output = highlighted_output.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                
-                # Replace with styled tags
-                # Red for urgency
-                urgency_terms = ['urgent', 'suspend', 'verify', 'immediately', 'action', 'alert', 'compromised', 'restricted', 'password', 'login']
-                for term in urgency_terms:
-                    highlighted_output = re.sub(
-                        f"\\b({term})\\b", 
-                        r"<mark style='background-color: rgba(255, 0, 127, 0.2); color: #ff007f; padding: 2px 4px; border-radius: 4px;'>\1</mark>", 
-                        highlighted_output, 
-                        flags=re.IGNORECASE
-                    )
-                # Blue for links
-                highlighted_output = re.sub(
-                    r'(https?://\S+|www\.\S+)',
-                    r"<mark style='background-color: rgba(0, 242, 254, 0.2); color: #00f2fe; padding: 2px 4px; border-radius: 4px;'>\1</mark>",
-                    highlighted_output,
-                    flags=re.IGNORECASE
-                )
-                # Orange for money
-                money_terms = ['\\$', '€', '£', 'usd', 'transfer', 'wire', 'payment', 'invoice']
-                for term in money_terms:
-                    highlighted_output = re.sub(
-                        f"\\b({term})\\b", 
-                        r"<mark style='background-color: rgba(249, 115, 22, 0.2); color: #f97316; padding: 2px 4px; border-radius: 4px;'>\1</mark>", 
-                        highlighted_output, 
-                        flags=re.IGNORECASE
-                    )
-                
-                highlighted_output = highlighted_output.replace("\n", "<br>")
                 st.markdown(f'<div class="cyber-terminal">{highlighted_output}</div>', unsafe_allow_html=True)
                 
                 # Report Generation Download Button
@@ -766,17 +599,12 @@ else:
 ---
 **Scan Status:** {"⚠️ PHISHING DETECTED" if prediction == 1 else "🟢 SAFE EMAIL"}
 **Severity Score:** {risk_score} / 100 ({risk_label})
-**Classification Type:** {phishing_type}
-**Identified Target Brand:** {target_brand}
+**Classification Type:** {attack_type}
 **Engine Neural Confidence:** {confidence*100:.2f}%
+**Primary Reason:** {reason}
 
-## Structural Heuristics Metrics
-* Email Length: {email_length} characters
-* Extracted Link Count: {url_count}
-* Suspicious TLD present: {"Yes" if has_suspicious_tld else "No"}
-* Urgency Keyword Matches: {urgency_count}
-* MFA Lure Indicators: {"Yes" if has_mfa_lure else "No"}
-* Financial Char/Bait matches: {money_char_count}
+## Identified IOC Signatures
+""" + "\n".join(f"* {ind}" for ind in indicators) + f"""
 
 ## Threat Mitigating Recommendations
 1. {"DO NOT click any embedded links or credentials reset forms." if prediction == 1 else "The text looks standard, but always verify the email headers."}

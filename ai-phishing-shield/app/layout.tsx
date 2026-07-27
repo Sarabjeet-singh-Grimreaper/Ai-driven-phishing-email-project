@@ -12,8 +12,8 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'AI Phishing Shield - Enterprise Email Security',
-  description: 'Advanced AI-powered phishing detection and email security platform',
+  title: 'AI CyberShield - Intelligent Email Threat Intelligence Platform',
+  description: 'Enterprise-grade AI email security and cyber threat intelligence platform',
   generator: 'v0.app',
   icons: {
     icon: [

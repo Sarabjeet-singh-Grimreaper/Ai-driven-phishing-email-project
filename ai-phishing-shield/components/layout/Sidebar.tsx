@@ -46,9 +46,9 @@ export const Sidebar = () => {
           </div>
           <div className="hidden md:flex flex-col">
             <span className="font-sans font-bold text-lg gradient-text">
-              Phishing
+              AI CyberShield
             </span>
-            <span className="text-xs text-slate-400">Shield</span>
+            <span className="text-xs text-slate-400">Threat Intel Platform</span>
           </div>
         </motion.div>
 

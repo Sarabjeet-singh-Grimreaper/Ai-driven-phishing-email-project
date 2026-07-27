@@ -13,3 +13,5 @@ class AnalysisResponse(BaseModel):
     indicators: List[str]
     highlighted_email: str
     model: str
+    reason: Optional[str] = None
+    reasons: Optional[List[str]] = []

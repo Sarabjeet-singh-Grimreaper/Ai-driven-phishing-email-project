@@ -132,8 +132,8 @@ export default function Home() {
               <Shield className="w-6 h-6 text-cyan-400" />
             </div>
             <div className="flex flex-col">
-              <span className="font-display font-bold text-lg gradient-text">Phishing</span>
-              <span className="text-xs text-muted-foreground leading-none">Shield</span>
+              <span className="font-display font-bold text-lg gradient-text">AI CyberShield</span>
+              <span className="text-xs text-muted-foreground leading-none">Threat Intel</span>
             </div>
           </div>
 
@@ -242,7 +242,7 @@ export default function Home() {
           transition={{ duration: 0.6, delay: 1 }}
           className="border-t border-white/10 py-8 px-6 md:px-12 text-center text-sm text-muted-foreground"
         >
-          <p>AI Phishing Shield • Powered by advanced machine learning • v1.0</p>
+          <p>AI CyberShield • Powered by advanced machine learning • v2.0</p>
         </motion.footer>
       </div>
     </div>

@@ -6,15 +6,15 @@ real-world dataset: 'Phishing_Email.csv' (~18,650 samples).
 
 It features:
 1. Real Data Ingestion & Target Variable Encoding.
-2. Advanced Hybrid Feature Extraction (Text vectorization + custom metadata features).
+2. Advanced Hybrid Feature Extraction (Text vectorization + custom metadata features via shared pipeline_utils).
 3. Class Imbalance Mitigation (Class-weighted models).
-4. Hyperparameter Tuning using Cross-Validated Grid Search (`GridSearchCV`).
-5. Comprehensive Visual & Quantitative Evaluation (ROC-AUC Curves, Confusion Matrix, Classification Reports).
-6. Model & Vectorizer Persistence for deployment.
+4. Model Calibration to ensure predicted probabilities match real likelihoods.
+5. Versioned Model Persistence.
 """
 
 import os
 import re
+import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -27,49 +27,17 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_curve, roc_auc_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+
+# Add backend to sys.path to load shared modules
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+from app.services.pipeline_utils import EmailFeatureExtractor, preprocess_text
 
 # Set plotting styles
 sns.set_theme(style="whitegrid")
-
-# Hardcoded Stopwords to prevent NLTK environment security violations
-STOPWORDS = set([
-    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", 
-    "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", 
-    "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", 
-    "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", 
-    "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
-    "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", 
-    "with", "about", "against", "between", "into", "through", "during", "before", "after", 
-    "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", 
-    "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", 
-    "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", 
-    "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", 
-    "should", "now"
-])
-
-def preprocess_email(text):
-    """
-    Cleans raw email text: lowercases, removes HTML tags and punctuation, splits tokens, and filters stopwords.
-    """
-    if not isinstance(text, str):
-        return ""
-    
-    # Lowercase
-    text = text.lower()
-    # Strip HTML tags
-    text = re.sub(r'<[^>]+>', ' ', text)
-    # Filter punctuation & special characters (keep space & alphanumeric)
-    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-    # Tokenize
-    tokens = text.split()
-    # Filter stopwords
-    filtered_tokens = [word for word in tokens if word not in STOPWORDS]
-    
-    return " ".join(filtered_tokens)
-
 
 # ==========================================
 # 1. REAL DATASET INGESTION
@@ -104,64 +72,25 @@ print("\n")
 # ==========================================
 print("=== Phase 2: Hybrid Feature Engineering ===")
 
-# A. Extract Structural/Metadata heuristic features
-url_pattern = re.compile(
-    r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.\S+|<a\s+href=|href\s*=\s*[\'"][^\'"]*[\'"]|bit\.ly|tinyurl\.com|t\.co|ow\.ly|is\.gd|buff\.ly|rebrand\.ly',
-    re.IGNORECASE
-)
-df['url_count'] = df['Email Text'].apply(lambda x: len(url_pattern.findall(str(x))))
+# Instantiate the shared extractor
+extractor = EmailFeatureExtractor()
+print("Extracting rich cyber heuristics & NLP patterns...")
+meta_df = extractor.transform(df['Email Text'].tolist())
 
-# Suspicious top-level domains & subdomains
-tld_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
-df['has_suspicious_tld'] = df['Email Text'].apply(lambda x: 1 if tld_pattern.search(str(x)) else 0)
-
-# Modern security/MFA lures
-mfa_keywords = ['mfa', '2fa', 'otp', 'authenticator', 'verification code', 'one-time', 'passcode']
-def check_mfa_lure(text):
-    text_lower = str(text).lower()
-    return 1 if any(word in text_lower for word in mfa_keywords) else 0
-df['has_mfa_lure'] = df['Email Text'].apply(check_mfa_lure)
-
-# Expanded urgency and modern corporate brand lures (Invoice, Delivery, Payment, Auth)
-urgency_keywords = [
-    'urgent', 'suspend', 'verify', 'action', 'alert', 'immediately', 'compromised', 'claim', 
-    'restricted', 'security', 'update', 'password', 'confirm', 'attention', 'required', 'login',
-    'unusual', 'activity', 'invoice', 'overdue', 'billing', 'delivery', 'fedex', 'ups', 'paypal', 
-    'crypto', 'wallet', 'authorize', 'deactivate', 'block'
-]
-def count_urgency_keywords(text):
-    text_lower = str(text).lower()
-    return sum(1 for word in urgency_keywords if word in text_lower)
-
-df['urgency_count'] = df['Email Text'].apply(count_urgency_keywords)
-df['email_length'] = df['Email Text'].apply(lambda x: len(str(x)))
-df['exclamation_count'] = df['Email Text'].apply(lambda x: str(x).count('!'))
-df['money_char_count'] = df['Email Text'].apply(
-    lambda x: str(x).count('$') + str(x).count('€') + str(x).count('£') + 
-              str(x).lower().count('usd') + str(x).lower().count('transfer')
-)
-
-# B. Clean unstructured text column
+# Clean unstructured text column
 print("Preprocessing raw email body text...")
-df['cleaned_text'] = df['Email Text'].apply(preprocess_email)
+df['cleaned_text'] = df['Email Text'].apply(preprocess_text)
 
-# C. Text Vectorization (TF-IDF Vectorizer with max 4000 features)
+# Text Vectorization (TF-IDF Vectorizer with max 4000 features)
 vectorizer = TfidfVectorizer(max_features=4000)
 tfidf_features = vectorizer.fit_transform(df['cleaned_text']).toarray()
 tfidf_df = pd.DataFrame(tfidf_features, columns=vectorizer.get_feature_names_out())
 
-# D. Consolidate TF-IDF with engineered structural features
-metadata_cols = ['url_count', 'has_suspicious_tld', 'has_mfa_lure', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
-metadata_df = df[metadata_cols].reset_index(drop=True)
-
-# Standardize/Scale the non-binary structural columns using MinMaxScaler to ensure values are non-negative (required for MultinomialNB)
-from sklearn.preprocessing import MinMaxScaler
+# Scale all numeric heuristic features using MinMaxScaler (required for MultinomialNB compatibility)
 scaler = MinMaxScaler()
-metadata_scaled = metadata_df.copy()
-scale_cols = ['url_count', 'urgency_count', 'email_length', 'exclamation_count', 'money_char_count']
-metadata_scaled[scale_cols] = scaler.fit_transform(metadata_df[scale_cols])
+meta_scaled = pd.DataFrame(scaler.fit_transform(meta_df), columns=meta_df.columns)
 
-X = pd.concat([tfidf_df, metadata_scaled], axis=1)
+X = pd.concat([tfidf_df, meta_scaled], axis=1)
 y = df['label'].reset_index(drop=True)
 
 # Split dataset (80% Train, 20% Test)
@@ -177,7 +106,7 @@ print("\n")
 print("=== Phase 3: Grid Search Optimization & Model Training ===")
 
 # Tune Random Forest Classifier
-print("Tuning Random Forest via GridSearchCV (sequential execution to save resources)...")
+print("Tuning Random Forest via GridSearchCV...")
 rf_param_grid = {
     'n_estimators': [50, 100],
     'max_depth': [15, None],
@@ -187,11 +116,20 @@ rf_grid.fit(X_train, y_train)
 best_rf = rf_grid.best_estimator_
 print(f"Optimal Random Forest params: {rf_grid.best_params_}")
 
+# Calibrate Random Forest predictions for true confidence scores
+print("Calibrating Random Forest Classifier...")
+calibrated_rf = CalibratedClassifierCV(
+    estimator=RandomForestClassifier(class_weight='balanced', random_state=42, **rf_grid.best_params_), 
+    method='sigmoid', 
+    cv=3
+)
+calibrated_rf.fit(X_train, y_train)
+
 # Baseline Class-Weighted Classifiers
 models = {
     "Logistic Regression": LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42),
     "Naive Bayes": MultinomialNB(),
-    "Random Forest (Tuned)": best_rf,
+    "Random Forest (Tuned)": calibrated_rf,
     "Neural Network (MLP)": MLPClassifier(hidden_layer_sizes=(50, 25), max_iter=200, early_stopping=True, random_state=42)
 }
 
@@ -275,18 +213,23 @@ print("\n")
 
 
 # ==========================================
-# 5. MODEL PERSISTENCE
+# 5. MODEL PERSISTENCE WITH VERSIONING
 # ==========================================
 print("=== Phase 5: Model Persistence ===")
 
-# Save the best model, vectorizer, and scaler
+# Save standard production model
 joblib.dump(best_clf, "best_phishing_model.joblib")
 joblib.dump(vectorizer, "tfidf_vectorizer.joblib")
 joblib.dump(scaler, "metadata_scaler.joblib")
 
-print("Serialized artifacts saved to disk:")
-print(" - Model: best_phishing_model.joblib")
-print(" - Vectorizer: tfidf_vectorizer.joblib")
-print(" - Scaler: metadata_scaler.joblib")
-print("\nPipeline execution complete!")
+# Save versioned production model
+model_version = "v2.0"
+joblib.dump(best_clf, f"best_phishing_model_{model_version}.joblib")
+joblib.dump(vectorizer, f"tfidf_vectorizer_{model_version}.joblib")
+joblib.dump(scaler, f"metadata_scaler_{model_version}.joblib")
 
+print("Serialized artifacts saved to disk (Standard & Versioned):")
+print(" - Model: best_phishing_model.joblib & best_phishing_model_v2.0.joblib")
+print(" - Vectorizer: tfidf_vectorizer.joblib & tfidf_vectorizer_v2.0.joblib")
+print(" - Scaler: metadata_scaler.joblib & metadata_scaler_v2.0.joblib")
+print("\nPipeline execution complete!")
