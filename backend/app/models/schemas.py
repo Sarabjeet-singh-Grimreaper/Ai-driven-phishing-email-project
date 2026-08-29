@@ -1,5 +1,17 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, HttpUrl
 from typing import List, Optional, Dict, Any
+
+class FlaggedTokenSchema(BaseModel):
+    start: int
+    end: int
+    token: str
+    type: str
+
+class TextScanRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=150000, description="Raw text of the email or message to inspect")
+
+class UrlScanRequest(BaseModel):
+    url: str = Field(..., min_length=4, max_length=2048, description="Target URL string to evaluate reputation for")
 
 class EmailAnalysisRequest(BaseModel):
     email: str
@@ -19,6 +31,7 @@ class AnalysisResponse(BaseModel):
     feature_contributions: Optional[dict] = None
     lexical_url_analysis: Optional[dict] = None
     nlp_intents: Optional[dict] = None
+    flagged_tokens: Optional[List[FlaggedTokenSchema]] = []
 
 class AsyncTaskAcceptedResponse(BaseModel):
     task_id: str

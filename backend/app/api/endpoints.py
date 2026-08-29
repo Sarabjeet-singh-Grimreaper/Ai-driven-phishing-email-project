@@ -5,12 +5,14 @@ import logging
 import re
 import uuid
 import asyncio
+import email
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from app.models.schemas import (
     EmailAnalysisRequest, AnalysisResponse, AsyncTaskAcceptedResponse,
-    AsyncTaskStatusResponse, BatchScanRequest, BatchScanResponse, HistoricalAnalyticsResponse
+    AsyncTaskStatusResponse, BatchScanRequest, BatchScanResponse, HistoricalAnalyticsResponse,
+    TextScanRequest, UrlScanRequest
 )
 from app.services.prediction_service import prediction_service
 from app.services.pdf_generator import generate_threat_pdf
@@ -26,6 +28,62 @@ router = APIRouter()
 # In-memory storage for PDF downloads and fast lookups
 SCANNED_REPORTS = {}
 COUNTER = 100
+
+def extract_text_from_mime(message_bytes: bytes) -> str:
+    try:
+        msg = email.message_from_bytes(message_bytes)
+        body = ""
+        subject = msg.get('Subject', '')
+        sender = msg.get('From', '')
+        
+        header_text = f"From: {sender}\nSubject: {subject}\n"
+        
+        # Check SPF/DKIM headers if present in EML
+        spf_header = msg.get('Received-SPF', '')
+        if spf_header:
+            header_text += f"Received-SPF: {spf_header}\n"
+        dkim_header = msg.get('DKIM-Signature', '')
+        if dkim_header:
+            header_text += "DKIM-Signature: present\n"
+            
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition"))
+                if content_type == "text/plain" and "attachment" not in content_disposition:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        body += payload.decode(errors="ignore") + "\n"
+                elif content_type == "text/html" and "attachment" not in content_disposition:
+                    payload = part.get_payload(decode=True)
+                    if payload and not body:
+                        body += payload.decode(errors="ignore") + "\n"
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                body = payload.decode(errors="ignore")
+                
+        full_text = header_text + "\n" + (body if body else "Empty MIME body payload.")
+        return full_text
+    except Exception as e:
+        logger.error(f"EML parser error: {e}")
+        return f"Failed to extract text from EML file: {str(e)}"
+
+def extract_text_from_msg(file_bytes: bytes) -> str:
+    try:
+        import extract_msg
+        msg = extract_msg.openMsg(file_bytes)
+        body = f"From: {msg.sender}\nSubject: {msg.subject}\n\n{msg.body}"
+        return body
+    except Exception as e:
+        logger.warning(f"Native MSG parser failed fallback to string extraction: {e}")
+        try:
+            text = file_bytes.decode('utf-16-le', errors='ignore')
+            if "Subject" in text or "From" in text:
+                return text
+            return file_bytes.decode('ascii', errors='ignore')
+        except Exception:
+            return "Failed to parse MSG file content."
 
 def perform_ocr(file_bytes: bytes) -> str:
     try:
@@ -112,6 +170,79 @@ async def analyze_email(payload: EmailAnalysisRequest):
     except Exception as e:
         logger.error(f"Error during email prediction analysis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Engine analysis error: {str(e)}")
+
+@router.post("/v1/scan/text", response_model=AnalysisResponse)
+async def scan_text_v1(payload: TextScanRequest):
+    start_time = time.time()
+    try:
+        result = await run_in_threadpool(prediction_service.predict, payload.text)
+        db_id = await run_in_threadpool(db_service.log_scan, result)
+        
+        report_id = str(db_id)
+        result_copy = result.copy()
+        result_copy["id"] = report_id
+        SCANNED_REPORTS[report_id] = result_copy
+        result["id"] = report_id
+        
+        latency = (time.time() - start_time) * 1000
+        logger.info(f"API v1 scan text. Verdict: {result['prediction']} | DB ID: {db_id} | Latency: {latency:.2f}ms")
+        return result
+    except Exception as e:
+        logger.error(f"Error during API v1 scan text: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/v1/scan/file", response_model=AnalysisResponse)
+async def scan_file_v1(file: UploadFile = File(...)):
+    start_time = time.time()
+    content = await file.read()
+    ext = os.path.splitext(file.filename)[1].lower()
+    
+    if ext not in ['.eml', '.msg']:
+        raise HTTPException(status_code=400, detail="Only .eml and .msg files are supported.")
+        
+    try:
+        if ext == '.eml':
+            extracted_text = await run_in_threadpool(extract_text_from_mime, content)
+        else:
+            extracted_text = await run_in_threadpool(extract_text_from_msg, content)
+            
+        result = await run_in_threadpool(prediction_service.predict, extracted_text)
+        db_id = await run_in_threadpool(db_service.log_scan, result, file_name=file.filename)
+        
+        report_id = str(db_id)
+        result_copy = result.copy()
+        result_copy["id"] = report_id
+        SCANNED_REPORTS[report_id] = result_copy
+        result["id"] = report_id
+        
+        latency = (time.time() - start_time) * 1000
+        logger.info(f"API v1 scan file. Verdict: {result['prediction']} | DB ID: {db_id} | Latency: {latency:.2f}ms")
+        return result
+    except Exception as e:
+        logger.error(f"Error during API v1 scan file: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/v1/scan/url", response_model=AnalysisResponse)
+async def scan_url_v1(payload: UrlScanRequest):
+    start_time = time.time()
+    try:
+        # Wrap URL in standard email inspection text
+        email_mock = f"Subject: Account Warning\nFrom: support@brand.com\n\nPlease check this link immediately: {payload.url}"
+        result = await run_in_threadpool(prediction_service.predict, email_mock)
+        db_id = await run_in_threadpool(db_service.log_scan, result)
+        
+        report_id = str(db_id)
+        result_copy = result.copy()
+        result_copy["id"] = report_id
+        SCANNED_REPORTS[report_id] = result_copy
+        result["id"] = report_id
+        
+        latency = (time.time() - start_time) * 1000
+        logger.info(f"API v1 scan URL. Verdict: {result['prediction']} | DB ID: {db_id} | Latency: {latency:.2f}ms")
+        return result
+    except Exception as e:
+        logger.error(f"Error during API v1 scan URL: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/upload-image", response_model=AnalysisResponse)
 async def upload_image(file: UploadFile = File(...)):
