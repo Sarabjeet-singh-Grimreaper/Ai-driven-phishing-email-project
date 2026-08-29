@@ -1,7 +1,6 @@
 import os
 import re
 import sys
-import uuid
 import html
 import json
 import urllib.request
@@ -9,15 +8,18 @@ import urllib.error
 import pandas as pd
 import numpy as np
 import streamlit as st
-import joblib
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 from app.services.prediction_service import prediction_service
 
-# Set Wide Page Config
+# Set Page Config (Wide Layout)
 st.set_page_config(page_title="CyberShield Command", page_icon="🛡️", layout="wide")
 
-# Initialize session statistics
+# Active Navigation State
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "Command"
+
+# Statistics state
 if "scanned_count" not in st.session_state:
     st.session_state.scanned_count = 1432
 if "threats_blocked" not in st.session_state:
@@ -27,7 +29,25 @@ if "safe_emails" not in st.session_state:
 if "avg_risk_score" not in st.session_state:
     st.session_state.avg_risk_score = 34.2
 
-# API Request Wrappers
+# Default case email body
+DEFAULT_EMAIL_CONTENT = """Hi Sarabjeet Singh,
+
+Quick reminder: the IBM Z Datathon 2026 Speakers Session is happening tonight!
+Keynote Speaker: Sadie Reverbcomb, IBM Z and LinuxONE Security Product Manager, zNext
+
+Time: 7:30 PM - 8:30 PM IST (60 minutes)
+Mode: Online Session (Live)
+
+Registered already? Your joining link should have been sent to your registered email. Please check your inbox and spam folder closer to the session time.
+
+Haven't registered yet? There's still time — register now to receive your joining link:
+https://forms.gle/RfZN8Nm3hBWKKUj08
+
+Don't miss this chance to hear directly from an industry leader shaping the future of IBM Z & LinuxONE security and earn points on the feedback form .
+
+https://email.shooting-stars-foundation.org/unsubscribe/k361t5uRVRwZX94Ib4PcJNjNj24KX2Z76389250Ucp5d1ZK601iDUFjM4kdA5n8mafQ/Jmb0iweb9165Myc8hf2PHA/S892TZvEzsXsYxWutLb8riwqU"""
+
+# REST API scan helpers
 def api_scan_text(text: str) -> dict:
     url = "http://127.0.0.1:8000/api/v1/scan/text"
     req_body = json.dumps({"text": text}).encode("utf-8")
@@ -38,14 +58,13 @@ def api_scan_text(text: str) -> dict:
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=12) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            res_data["_source"] = "FastAPI Asynchronous REST Endpoint"
-            return res_data
-    except Exception as e:
-        # Fall back to local in-process prediction
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res = json.loads(response.read().decode("utf-8"))
+            res["_source"] = "FastAPI REST API"
+            return res
+    except Exception:
         fallback = prediction_service.predict(text)
-        fallback["_source"] = "Local Inference Engine (In-Process Fallback)"
+        fallback["_source"] = "Local Engine (Fallback)"
         return fallback
 
 def api_scan_url(target_url: str) -> dict:
@@ -58,270 +77,341 @@ def api_scan_url(target_url: str) -> dict:
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=12) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            res_data["_source"] = "FastAPI Asynchronous REST Endpoint"
-            return res_data
-    except Exception as e:
-        email_mock = f"Subject: Account Warning\nFrom: support@brand.com\n\nPlease check this link immediately: {target_url}"
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res = json.loads(response.read().decode("utf-8"))
+            res["_source"] = "FastAPI REST API"
+            return res
+    except Exception:
+        email_mock = f"Subject: Verification Alert\nFrom: alert@brand-verify.com\n\nTarget link: {target_url}"
         fallback = prediction_service.predict(email_mock)
-        fallback["_source"] = "Local Inference Engine (In-Process Fallback)"
+        fallback["_source"] = "Local Engine (Fallback)"
         return fallback
 
-
-# 1. Custom CSS Theme & Glassmorphic Surfaces
-CUSTOM_CSS = """
+# Custom Tactical Theme Injection
+CUSTOM_THEME_CSS = """
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
   :root {
     --bg-dark: #080b11;
-    --card-bg: rgba(15, 23, 42, 0.7);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --red-glow: #ef4444;
-    --emerald-glow: #10b981;
-    --accent-cyan: #06b6d4;
+    --card-bg: #0d121d;
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --red-glow: #e25c50;
+    --green-glow: #10b981;
+    --blue-accent: #06b6d4;
   }
 
   .stApp {
     background-color: var(--bg-dark);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+    color: #cbd5e1;
   }
 
-  /* Header Brand Bar */
-  .brand-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1.25rem 2rem;
-    background: linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.3) 100%);
-    border-bottom: 1px solid var(--border-subtle);
-    border-radius: 16px;
-    margin-bottom: 1.5rem;
-    backdrop-filter: blur(12px);
-  }
-
-  /* Glassmorphic Tactical Cards */
+  /* Glassmorphic Tactical Card */
   .tactical-card {
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
-    border-radius: 14px;
+    border-radius: 12px;
     padding: 1.25rem;
-    backdrop-filter: blur(16px);
-    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
     margin-bottom: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   }
 
-  /* Threat Banner */
-  .threat-banner-malicious {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(15, 23, 42, 0.9));
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    border-radius: 12px;
-    padding: 1.25rem;
-    position: relative;
-    overflow: hidden;
-  }
-
-  /* Email Document Viewer */
+  /* Document Pane */
   .email-doc-pane {
-    background: #0d121d;
+    background: #090d14;
     border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    padding: 1.5rem;
-    color: #cbd5e1;
-    line-height: 1.7;
-    font-size: 0.92rem;
+    border-radius: 8px;
+    padding: 1.25rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    font-size: 0.9rem;
   }
 
-  /* Clean Inline Entity Tags */
-  .tag-urgent { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 2px 6px; border-radius: 4px; font-weight: 600; }
-  .tag-finance { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); padding: 2px 6px; border-radius: 4px; font-weight: 600; }
-  .tag-brand { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px 6px; border-radius: 4px; font-weight: 600; }
-  .tag-url { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+  /* Custom Sidebar styling */
+  .sidebar-header {
+    margin-bottom: 2rem;
+  }
+  .sidebar-profile {
+    margin-top: auto;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-subtle);
+  }
 
-  /* Tab System Design overrides */
-  div[data-testid="stTabBar"] {
-    background-color: rgba(15, 23, 42, 0.6);
-    border-radius: 10px;
-    padding: 4px;
-    border: 1px solid var(--border-subtle);
+  /* Evidence badging and highlighting styling */
+  .highlight-badge-wrapper {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #fbbf24;
+    background: rgba(245, 158, 11, 0.08);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin: 2px 4px;
   }
-  button[data-baseweb="tab"] {
-    color: #94a3b8 !important;
-    border-bottom: none !important;
-    padding: 8px 16px !important;
-    font-weight: 700 !important;
-    border-radius: 6px !important;
-    font-size: 0.8rem !important;
+  .highlight-badge-lbl {
+    background: #fbbf24;
+    color: #0f172a;
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 1px 3px;
+    border-radius: 2px;
+    margin-right: 6px;
+    letter-spacing: 0.05em;
   }
-  button[data-baseweb="tab"][aria-selected="true"] {
-    background: rgba(6, 182, 212, 0.12) !important;
-    color: #22d3ee !important;
-    border: 1px solid rgba(6, 182, 212, 0.2) !important;
+  .highlight-badge-val {
+    color: #f1f5f9;
+    font-weight: 500;
+    font-size: 0.85rem;
+  }
+
+  /* Button override styles */
+  div[data-testid="stSidebarNav"] {
+    display: none !important;
   }
 </style>
- lawn
 """
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+st.markdown(CUSTOM_THEME_CSS, unsafe_allow_html=True)
 
-# 2. Top Header Bar
-st.markdown("""
-<div class="brand-bar">
-  <div>
-    <h2 style="margin:0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; color: #fff;">
-      🛡️ CyberShield <span style="color: #06b6d4; font-weight: 400;">Command</span>
-    </h2>
-    <p style="margin:0; font-size: 0.8rem; color: #64748b;">Autonomous Email Forensics & Neural Threat Classification</p>
-  </div>
-  <div style="display: flex; gap: 10px; align-items: center;">
-    <span style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
-      ● ML ENGINE V2.5 ONLINE
-    </span>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+# ------------------ SIDEBAR NAVIGATION ------------------
+with st.sidebar:
+    st.markdown('<div class="sidebar-header">', unsafe_allow_html=True)
+    st.markdown('<h2 style="color:#f1f5f9; font-size:1.35rem; font-weight:800; margin:0;">🛡️ CyberShield</h2>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#06b6d4; font-size:0.7rem; font-family:monospace; margin:0; letter-spacing:0.1em;">COMMAND</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('<p style="font-size:0.65rem; color:#475569; font-weight:700; text-transform:uppercase; margin-bottom:12px;">Workspace</p>', unsafe_allow_html=True)
+    
+    # Styled buttons for Workspace Navigation
+    if st.button("🖥️ Command", use_container_width=True, type="primary" if st.session_state.active_tab == "Command" else "secondary"):
+        st.session_state.active_tab = "Command"
+        st.rerun()
+        
+    if st.button("🌐 Reputation", use_container_width=True, type="primary" if st.session_state.active_tab == "Reputation" else "secondary"):
+        st.session_state.active_tab = "Reputation"
+        st.rerun()
+        
+    if st.button("📊 Telemetry", use_container_width=True, type="primary" if st.session_state.active_tab == "Telemetry" else "secondary"):
+        st.session_state.active_tab = "Telemetry"
+        st.rerun()
 
-# 3. Main Workspace Navigation
-tab_analyzer, tab_reputation, tab_telemetry = st.tabs([
-    "⚡ Threat Vector Analyzer", 
-    "🌐 Domain & URL Reputation", 
-    "📊 Model Telemetry"
-])
+    st.markdown('<br><p style="font-size:0.65rem; color:#475569; font-weight:700; text-transform:uppercase; margin-bottom:12px;">Tools</p>', unsafe_allow_html=True)
+    st.button("📂 Saved packets", use_container_width=True, disabled=True)
+    st.button("⚙️ Settings", use_container_width=True, disabled=True)
+    
+    st.markdown('<div class="sidebar-profile">', unsafe_allow_html=True)
+    st.markdown('<p style="color:#f1f5f9; font-size:0.85rem; font-weight:700; margin:0;">Sarabjeet Singh</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#64748b; font-size:0.7rem; margin:0;">analyst</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Highlight sanitization function (No HTML leaks)
-def highlight_email_payload(raw_text):
+
+# Highlight function matching the design spec highlights
+def highlight_email_tactical(raw_text):
     safe = html.escape(raw_text)
-    safe = re.sub(r'(Google|Microsoft|Apple|Amazon|Netflix|PayPal)', r'<span class="tag-brand">\1</span>', safe, flags=re.IGNORECASE)
-    safe = re.sub(r'(billing|credits|invoice|payment|usd|wire|transfer|cost|fee|price)', r'<span class="tag-finance">\1</span>', safe, flags=re.IGNORECASE)
-    safe = re.sub(r'(immediately|within 8-hour period|today|urgent|suspend|action|alert|required|deactivate|block)', r'<span class="tag-urgent">\1</span>', safe, flags=re.IGNORECASE)
-    safe = re.sub(r'(https?://[^\s<>]+)', r'<span class="tag-url">\1</span>', safe)
+    
+    # Highlight brands
+    def wrap_brand(m):
+        return f'<span class="highlight-badge-wrapper"><span class="highlight-badge-lbl">EVIDENCE</span><span class="highlight-badge-val">{m.group(0)}</span></span>'
+    safe = re.sub(r'\b(Google|Microsoft|Apple|Amazon|Netflix|PayPal|IBM|LinuxONE)\b', wrap_brand, safe, flags=re.IGNORECASE)
+    
+    # Highlight links
+    def wrap_url(m):
+        return f'<span class="highlight-badge-wrapper"><span class="highlight-badge-lbl">EVIDENCE</span><span class="highlight-badge-val" style="font-family:monospace;">{m.group(0)}</span></span>'
+    safe = re.sub(r'(https?://[^\s<>]+)', wrap_url, safe)
+    
     return safe.replace("\n", "<br>")
 
-with tab_analyzer:
-    col_input, col_feed = st.columns([1, 1.25], gap="large")
+
+# ------------------ COMMAND TAB ------------------
+if st.session_state.active_tab == "Command":
+    # 1. Header Section
+    col_header_title, col_header_status = st.columns([3, 1])
+    with col_header_title:
+        st.markdown('<p style="color:#fbbf24; font-size:0.7rem; font-weight:700; letter-spacing:0.05em; margin:0;">● ACTIVE CASE FILE / CS-7F19-2448</p>', unsafe_allow_html=True)
+        st.markdown('<h1 style="color:#f1f5f9; font-size:2rem; font-weight:800; margin:4px 0 0 0; letter-spacing:-0.02em;">Packet under review</h1>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#64748b; font-size:0.8rem; margin:4px 0 20px 0;">Email forensics · one inbound message, one defensible readout.</p>', unsafe_allow_html=True)
+    with col_header_status:
+        st.markdown('<div style="text-align:right; margin-top:20px;"><span style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#34d399; padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:600;">● ENGINE ONLINE</span></div>', unsafe_allow_html=True)
+
+    # Calculate Default Scan Values (IBM speakers session email)
+    default_scan_res = prediction_service.predict(DEFAULT_EMAIL_CONTENT)
     
-    with col_input:
+    # Check trigger scan or use default
+    if "latest_result" not in st.session_state:
+        st.session_state.latest_result = default_scan_res
+        st.session_state.latest_email_body = DEFAULT_EMAIL_CONTENT
+        
+    latest_result = st.session_state.latest_result
+    latest_body = st.session_state.latest_email_body
+
+    # 2. Telemetry Cards Strip with SVG Sparklines
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""
+        <div class="tactical-card" style="display:flex; justify-content:space-between; align-items:center; height:90px;">
+          <div>
+            <p style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase; margin:0;">Current Verdict</p>
+            <h2 style="font-size:1.6rem; font-weight:800; color:#f1f5f9; margin:4px 0 0 0;">{latest_result['risk_score']} / 100</h2>
+            <p style="font-size:0.7rem; color:#94a3b8; margin:2px 0 0 0;">{latest_result['severity'].lower()} risk · {latest_result['attack_type'].lower()}</p>
+          </div>
+          <div style="text-align:right;">
+            <svg width="60" height="20"><path d="M0 15 Q 15 10, 30 18 T 60 5" fill="none" stroke="#e25c50" stroke-width="1.5"/></svg>
+            <div style="font-size:0.65rem; color:#e25c50; font-weight:700;">↓ 4 pts</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="tactical-card" style="display:flex; justify-content:space-between; align-items:center; height:90px;">
+          <div>
+            <p style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase; margin:0;">Safety Confidence</p>
+            <h2 style="font-size:1.6rem; font-weight:800; color:#f1f5f9; margin:4px 0 0 0;">{latest_result['confidence']:.1f}%</h2>
+            <p style="font-size:0.7rem; color:#94a3b8; margin:2px 0 0 0;">local model confidence</p>
+          </div>
+          <div style="text-align:right;">
+            <svg width="60" height="20"><path d="M0 18 Q 15 15, 30 10 T 60 4" fill="none" stroke="#10b981" stroke-width="1.5"/></svg>
+            <div style="font-size:0.65rem; color:#10b981; font-weight:700;">steady</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        indicators_count = len(latest_result["indicators"])
+        st.markdown(f"""
+        <div class="tactical-card" style="display:flex; justify-content:space-between; align-items:center; height:90px;">
+          <div>
+            <p style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase; margin:0;">Signals Found</p>
+            <h2 style="font-size:1.6rem; font-weight:800; color:#f1f5f9; margin:4px 0 0 0;">{indicators_count} active</h2>
+            <p style="font-size:0.7rem; color:#94a3b8; margin:2px 0 0 0;">{'no escalation required' if indicators_count < 2 else 'review recommended'}</p>
+          </div>
+          <div style="text-align:right;">
+            <svg width="60" height="20"><path d="M0 10 Q 15 12, 30 5 T 60 15" fill="none" stroke="#fbbf24" stroke-width="1.5"/></svg>
+            <div style="font-size:0.65rem; color:#fbbf24; font-weight:700;">last 24h</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 3. Main Split Ingestion Workspace
+    col_left, col_right = st.columns([1.5, 1], gap="large")
+    
+    with col_left:
         st.markdown('<div class="tactical-card">', unsafe_allow_html=True)
-        st.markdown("#### 📥 Forensics Ingestion Deck")
+        st.markdown('<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><div><span style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase;">Evidence in Focus</span><h4 style="margin:2px 0 0 0; color:#f1f5f9; font-size:1rem; font-weight:700;">Inbound email content</h4></div><span style="font-size:0.7rem; color:#64748b; font-family:monospace;">inbox_0829.eml</span></div>', unsafe_allow_html=True)
         
-        mode = st.radio("Mode", ["Raw Text / EML Payload", "OCR Vision Ingestion"], horizontal=True, label_visibility="collapsed")
+        # Email Input Text area
+        email_textarea = st.text_area("email_content_raw", value=latest_body, height=330, label_visibility="collapsed")
         
-        email_input = st.text_area(
-            "Payload",
-            height=280,
-            placeholder="Paste raw email content, SPF/DKIM headers, or suspicious text...",
-            label_visibility="collapsed"
-        )
-        
-        scan_btn = st.button("🚀 EXECUTE THREAT SCAN", use_container_width=True, type="primary")
+        # Threat Scan Button matching the layout
+        if st.button("🚀 RUN THREAT SCAN ↗", use_container_width=True, type="primary"):
+            with st.spinner("Analyzing email headers & payload..."):
+                res = api_scan_text(email_textarea)
+                st.session_state.latest_result = res
+                st.session_state.latest_email_body = email_textarea
+                
+                # Update statistics
+                st.session_state.scanned_count += 1
+                if res["prediction"] == "PHISHING":
+                    st.session_state.threats_blocked += 1
+                else:
+                    st.session_state.safe_emails += 1
+                st.rerun()
+
+        st.markdown("##### 🔍 Interactive Forensic Highlights")
+        st.markdown(f'<div class="email-doc-pane">{highlight_email_tactical(latest_body)}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_right:
+        # Verdict Summary box
+        is_phish = latest_result["prediction"] == "PHISHING"
+        st.markdown('<div class="tactical-card">', unsafe_allow_html=True)
+        if is_phish:
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle); padding-bottom:12px; margin-bottom:12px;">
+              <div>
+                <span style="color:#e25c50; font-size:0.7rem; font-weight:700; letter-spacing:0.05em;">● MALICIOUS VERDICT</span>
+                <p style="margin:2px 0 0 0; font-size:0.8rem; color:#94a3b8;">High threat severity</p>
+              </div>
+              <div style="text-align:right;">
+                <span style="font-size:1.6rem; font-weight:800; color:#e25c50;">{latest_result['risk_score']}</span><span style="font-size:0.8rem; color:#64748b;">/100</span>
+                <div style="font-size:0.6rem; color:#64748b; font-weight:700;">CRITICAL RISK</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle); padding-bottom:12px; margin-bottom:12px;">
+              <div>
+                <span style="color:#10b981; font-size:0.7rem; font-weight:700; letter-spacing:0.05em;">● VERIFIED LEGITIMATE</span>
+                <p style="margin:2px 0 0 0; font-size:0.8rem; color:#94a3b8;">No anomalous indicators found</p>
+              </div>
+              <div style="text-align:right;">
+                <span style="font-size:1.6rem; font-weight:800; color:#10b981;">{latest_result['risk_score']}</span><span style="font-size:0.8rem; color:#64748b;">/100</span>
+                <div style="font-size:0.6rem; color:#64748b; font-weight:700;">LOW RISK</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown(f"<p style='font-size:0.75rem; color:#64748b; margin:0;'>source / {latest_result.get('_source', 'local inference engine').lower()}</p>", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-    with col_feed:
-        # Check assets
-        assets_ready = os.path.exists("best_phishing_model.joblib") or os.path.exists("backend/best_phishing_model.joblib")
+        # Sender and Urgency sub-cards
+        sub1, sub2 = st.columns(2)
+        with sub1:
+            st.markdown(f"""
+            <div class="tactical-card" style="height:100px;">
+              <span style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase;">Sender</span>
+              <h5 style="margin:4px 0; color:#f1f5f9; font-size:0.9rem; font-weight:700;">{'Aligned' if not latest_result['feature_contributions'].get('brand_detected') else 'Spoofed Brand'}</h5>
+              <p style="font-size:0.7rem; color:#94a3b8; margin:0;">{'domain matches known surface' if not latest_result['feature_contributions'].get('brand_detected') else 'display-name mismatch'}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with sub2:
+            st.markdown(f"""
+            <div class="tactical-card" style="height:100px;">
+              <span style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase;">Urgency</span>
+              <h5 style="margin:4px 0; color:#f1f5f9; font-size:0.9rem; font-weight:700;">{'Mild' if latest_result['feature_contributions'].get('urgency_score', 0) < 2 else 'High urgency'}</h5>
+              <p style="font-size:0.7rem; color:#94a3b8; margin:0;">language adds +8 points</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # Signal Field
+        st.markdown(f"""
+        <div class="tactical-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span style="font-size:0.65rem; color:#64748b; font-weight:700; text-transform:uppercase;">Signal Field</span>
+            <span style="background:rgba(6,182,212,0.1); border:1px solid rgba(6,182,212,0.3); color:#22d3ee; padding:2px 8px; border-radius:12px; font-size:0.6rem; font-weight:700;">stable</span>
+          </div>
+          <span style="font-size:0.7rem; color:#64748b;">OBSERVED SURFACE</span>
+          <h4 style="margin:2px 0 0 0; color:#f1f5f9; font-size:1.1rem; font-weight:800;">{latest_result['attack_type']}</h4>
+          <p style="font-size:0.7rem; color:#94a3b8; margin:4px 0 0 0;">{latest_result['reason']}</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if not assets_ready:
-            st.error("🚨 System weights are not built. Train the classification model before running operations.")
-        else:
-            if scan_btn and email_input.strip():
-                with st.spinner("Executing neural scans..."):
-                    # Call async FastAPI scan text endpoint
-                    result = api_scan_text(email_input)
-                    
-                    is_phish = result["prediction"].upper() == "PHISHING"
-                    confidence = result["confidence"]
-                    risk_score = result["risk_score"]
-                    severity = result["severity"]
-                    attack_type = result["attack_type"]
-                    brand_name = result["feature_contributions"].get("brand_name", "None")
-                    reasons = result.get("reasons", [])
-                    source = result.get("_source", "REST API")
-                    
-                    # Update stats
-                    st.session_state.scanned_count += 1
-                    if is_phish:
-                        st.session_state.threats_blocked += 1
-                    else:
-                        st.session_state.safe_emails += 1
-                    st.session_state.avg_risk_score = round(((st.session_state.avg_risk_score * (st.session_state.scanned_count - 1)) + risk_score) / st.session_state.scanned_count, 1)
-                    
-                # Threat Banner Card
-                if is_phish:
-                    st.markdown(f"""
-                    <div class="threat-banner-malicious">
-                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                          <span style="color:#ef4444; font-weight:800; font-size:1rem; letter-spacing:0.05em;">🚨 MALICIOUS THREAT DETECTED</span>
-                          <p style="margin:4px 0 0 0; font-size:0.85rem; color:#94a3b8;">Target vector: <strong>{attack_type}</strong> • Neural Confidence: <strong>{confidence:.1f}%</strong></p>
-                          <p style="margin:2px 0 0 0; font-size:0.7rem; color:#64748b;">Source: <em>{source}</em></p>
-                        </div>
-                        <div style="text-align:right;">
-                          <span style="font-size: 1.8rem; font-weight: 800; color:#ef4444;">{risk_score}</span><span style="font-size:0.9rem; color:#64748b;">/100</span>
-                          <div style="font-size:0.7rem; color:#f87171; text-transform:uppercase; font-weight:600;">{severity} Risk</div>
-                        </div>
-                      </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div class="threat-banner-malicious" style="border-color: rgba(16, 185, 129, 0.4); background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(15, 23, 42, 0.9));">
-                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                          <span style="color:#10b981; font-weight:800; font-size:1rem; letter-spacing:0.05em;">🟢 VERIFIED LEGITIMATE PROFILE</span>
-                          <p style="margin:4px 0 0 0; font-size:0.85rem; color:#94a3b8;">No anomalous indicators found • Safety Confidence: <strong>{confidence:.1f}%</strong></p>
-                          <p style="margin:2px 0 0 0; font-size:0.7rem; color:#64748b;">Source: <em>{source}</em></p>
-                        </div>
-                        <div style="text-align:right;">
-                          <span style="font-size: 1.8rem; font-weight: 800; color:#10b981;">{risk_score}</span><span style="font-size:0.9rem; color:#64748b;">/100</span>
-                          <div style="font-size:0.7rem; color:#a7f3d0; text-transform:uppercase; font-weight:600;">{severity} Risk</div>
-                        </div>
-                      </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                # Metrics Strip
-                m1, m2 = st.columns(2)
-                with m1:
-                    st.markdown(f"""
-                    <div class="tactical-card" style="padding: 0.85rem 1.25rem;">
-                      <div style="font-size:0.75rem; color:#64748b; text-transform:uppercase;">Attack Classification</div>
-                      <div style="font-size:1.1rem; font-weight:700; color:#f1f5f9; margin-top:2px;">{attack_type}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with m2:
-                    st.markdown(f"""
-                    <div class="tactical-card" style="padding: 0.85rem 1.25rem;">
-                      <div style="font-size:0.75rem; color:#64748b; text-transform:uppercase;">Targeted Entity</div>
-                      <div style="font-size:1.1rem; font-weight:700; color:#34d399; margin-top:2px;">{brand_name}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                # Clean Document Viewer with Fixed Highlighting
-                st.markdown("##### 🔍 Interactive Forensic Highlights")
-                st.markdown(f'<div class="email-doc-pane">{highlight_email_payload(email_input)}</div>', unsafe_allow_html=True)
-                
-                # Legend Chips
-                st.markdown("""
-                <div style="display:flex; gap:12px; margin-top:10px; font-size:0.75rem;">
-                  <span><span class="tag-brand">■</span> Brand Identity</span>
-                  <span><span class="tag-finance">■</span> Financial Keyword</span>
-                  <span><span class="tag-urgent">■</span> Urgency Pressure</span>
-                  <span><span class="tag-url">■</span> Extracted URL</span>
-                </div>
-                """, unsafe_allow_html=True)
+        # View deep diagnostics link box
+        st.markdown(f"""
+        <div class="tactical-card" style="border: 1px dashed var(--border-subtle); display:flex; justify-content:space-between; align-items:center; padding:10px 15px;">
+          <span style="font-size:0.75rem; color:#cbd5e1; font-weight:600;">🔍 View deep diagnostics reasons</span>
+          <span style="font-size:0.8rem; color:#64748b;">➔</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("Diagnostics Log Detail"):
+            for r in latest_result.get("reasons", []):
+                st.markdown(f"<span style='font-size:0.75rem; color:#94a3b8;'>• {r}</span>", unsafe_allow_html=True)
 
-                with st.expander("🔎 View Deep Diagnostics Reasons"):
-                    for r in reasons:
-                        st.markdown(f"<span style='font-size: 0.75rem; color: #94a3b8;'>• {r}</span>", unsafe_allow_html=True)
-            else:
-                st.info("💡 Paste email payloads or headers into the Ingestion Deck and execute scan to populate the tactical feed.")
+    # 4. Footer Bar
+    st.markdown("<hr style='border-color:var(--border-subtle); margin:20px 0 10px 0;'>", unsafe_allow_html=True)
+    f_l, f_r = st.columns(2)
+    with f_l:
+        st.markdown("<span style='font-size:0.7rem; color:#475569;'>🛡️ CyberShield Command  |  local-first analysis</span>", unsafe_allow_html=True)
+    with f_r:
+        st.markdown("<div style='text-align:right;'><span style='font-size:0.7rem; color:#475569;'>📖 analyst notes  |  ➔ docs</span></div>", unsafe_allow_html=True)
 
-# ------------------ TAB 2: DOMAIN REPUTATION ------------------
-with tab_reputation:
-    st.markdown("<h4 style='font-weight: 800; font-size: 1rem; color: #06b6d4; margin-bottom: 12px; font-family: monospace;'>[ Domain Reputation Analytics ]</h4>", unsafe_allow_html=True)
-    url_input = st.text_input("Enter URL Target Domain", value="https://google.com-authorization-portal.xyz/verify-account")
-    inquire_domain = st.button("INQUIRE DOMAIN STATUS")
+
+# ------------------ DOMAIN REPUTATION TAB ------------------
+elif st.session_state.active_tab == "Reputation":
+    st.markdown('<p style="color:#06b6d4; font-size:0.7rem; font-family:monospace; margin:0; letter-spacing:0.1em;">[ DOMAIN & URL REPUTATION ]</p>', unsafe_allow_html=True)
+    st.markdown('<h1 style="color:#f1f5f9; font-size:1.8rem; font-weight:800; margin:4px 0 12px 0; letter-spacing:-0.02em;">Reputation Analytics Deck</h1>', unsafe_allow_html=True)
+    
+    url_input = st.text_input("Target URL Domain", value="https://google.com-authorization-portal.xyz/verify-account")
+    inquire_domain = st.button("INQUIRE DOMAIN STATUS", type="primary")
     
     if inquire_domain:
         st.markdown("<h5 style='font-weight: 700; font-size: 0.9rem; margin-top: 15px;'>Reputation Breakdown</h5>", unsafe_allow_html=True)
@@ -350,9 +440,11 @@ with tab_reputation:
             else:
                 st.success("🟢 Verified Clean: Domain resolves with reputable score.")
 
-# ------------------ TAB 3: MODEL TELEMETRY ------------------
-with tab_telemetry:
-    st.markdown("<h4 style='font-weight: 800; font-size: 1rem; color: #06b6d4; margin-bottom: 12px; font-family: monospace;'>[ Benchmark & Operational Metrics ]</h4>", unsafe_allow_html=True)
+
+# ------------------ TELEMETRY TAB ------------------
+elif st.session_state.active_tab == "Telemetry":
+    st.markdown('<p style="color:#06b6d4; font-size:0.7rem; font-family:monospace; margin:0; letter-spacing:0.1em;">[ BENCHMARK & OPERATIONAL METRICS ]</p>', unsafe_allow_html=True)
+    st.markdown('<h1 style="color:#f1f5f9; font-size:1.8rem; font-weight:800; margin:4px 0 12px 0; letter-spacing:-0.02em;">Model Telemetry Deck</h1>', unsafe_allow_html=True)
     
     bench_df = pd.DataFrame({
         "Classification Model": ["Logistic Regression", "Naive Bayes", "Random Forest (Tuned)", "Calibrated Hybrid Booster"],
