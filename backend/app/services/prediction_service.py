@@ -3,7 +3,7 @@ import re
 import joblib
 import pandas as pd
 import numpy as np
-from app.services.pipeline_utils import EmailFeatureExtractor, preprocess_text, BRANDS
+from app.services.pipeline_utils import EmailFeatureExtractor, preprocess_text, BRANDS, SUSPICIOUS_TLDS
 
 # Resolve model path relative to project root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -65,6 +65,127 @@ class PredictionService:
         prediction = int(self.model.predict(X_final)[0])
         confidence = float(self.model.predict_proba(X_final)[0][1]) if hasattr(self.model, "predict_proba") else 0.5
         
+        # Extract URLs
+        urls = re.findall(r'(https?://\S+|www\.\S+)', email_text, re.IGNORECASE)
+        
+        # 1. Lexical URL Analysis
+        lexical_url_results = {
+            "has_login_lure_path": False,
+            "has_brand_lure_path": False,
+            "has_at_symbol_obfuscation": False,
+            "has_excessive_subdomains": False,
+            "has_suspicious_tld": False,
+            "max_subdomains_count": 0,
+            "max_special_chars_count": 0
+        }
+        
+        suspicious_path_keywords = {"login", "signin", "verify", "verification", "secure", "update", "account", "reset", "password", "support", "billing", "invoice", "refund"}
+        for u in urls:
+            u_lower = u.lower()
+            domain_part_match = re.search(r'https?://(?:www\.)?([^/]+)', u, re.IGNORECASE)
+            if domain_part_match:
+                domain_part = domain_part_match.group(1)
+                if '@' in domain_part:
+                    lexical_url_results["has_at_symbol_obfuscation"] = True
+                
+                dots_count = domain_part.count('.')
+                if dots_count > 3:
+                    lexical_url_results["has_excessive_subdomains"] = True
+                lexical_url_results["max_subdomains_count"] = max(lexical_url_results["max_subdomains_count"], dots_count)
+            
+            path_part = u.split('/')[-1] if '/' in u else u
+            if any(kw in path_part.lower() for kw in suspicious_path_keywords):
+                lexical_url_results["has_login_lure_path"] = True
+            
+            if any(brand in path_part.lower() for brand in BRANDS):
+                lexical_url_results["has_brand_lure_path"] = True
+                
+            if any(f".{tld}" in u_lower for tld in SUSPICIOUS_TLDS):
+                lexical_url_results["has_suspicious_tld"] = True
+                
+            special_chars = sum(1 for c in u if c in ['-', '_', '@', '?', '='])
+            lexical_url_results["max_special_chars_count"] = max(lexical_url_results["max_special_chars_count"], special_chars)
+
+        # 2. NLP Intent Scanning
+        nlp_intent_results = {
+            "urgency_lure": False,
+            "credential_harvesting": False,
+            "financial_lure": False,
+            "mfa_otp_lure": False,
+            "authority_lure": False
+        }
+        
+        email_text_lower = email_text.lower()
+        
+        # Urgency Intent
+        urgency_patterns = [
+            r'action required', r'immediate', r'urgently', r'suspend', r'deactivat', r'within \d+ hours',
+            r'compromise', r'unusual activity', r'alert', r'terminate', r'restricted', r'expire'
+        ]
+        if any(re.search(p, email_text_lower) for p in urgency_patterns):
+            nlp_intent_results["urgency_lure"] = True
+            
+        # Credential Harvesting Intent
+        cred_patterns = [
+            r'reset your password', r'verify your account', r'update.*credential', r'login to', r'signin',
+            r'security settings', r'verification link', r'confirm.*identity', r'click here to verify',
+            r'password', r'login', r'credential', r'credentials'
+        ]
+        if any(re.search(p, email_text_lower) for p in cred_patterns):
+            nlp_intent_results["credential_harvesting"] = True
+            
+        # Financial Lure Intent
+        financial_patterns = [
+            r'invoice', r'payment', r'wire transfer', r'overdue', r'refund', r'billing', r'bank account',
+            r'transaction detail', r'remittance', r'purchase order', r'salary', r'payroll'
+        ]
+        if any(re.search(p, email_text_lower) for p in financial_patterns):
+            nlp_intent_results["financial_lure"] = True
+            
+        # MFA/OTP Bypass Intent
+        mfa_patterns = [
+            r'one-time passcode', r'verification code', r'mfa code', r'2fa token', r'passcode',
+            r'authenticator pin', r'enter code'
+        ]
+        if any(re.search(p, email_text_lower) for p in mfa_patterns):
+            nlp_intent_results["mfa_otp_lure"] = True
+            
+        # Authority / Executive Impersonation
+        authority_patterns = [
+            r'it support', r'system administrator', r'ceo office', r'human resources', r'legal department',
+            r'help desk', r'security desk', r'it operations'
+        ]
+        if any(re.search(p, email_text_lower) for p in authority_patterns):
+            nlp_intent_results["authority_lure"] = True
+
+        # Heuristic Override Rules (Defense-in-depth secure coding)
+        heuristic_override = False
+        override_reasons = []
+        
+        # Rule A: Display-Name spoofing + Lookalike domain mimicry -> override to PHISHING
+        if features.get("sender_spoofing", 0) > 0 and features.get("domain_similarity_score", 0) > 0.7:
+            heuristic_override = True
+            override_reasons.append("Lookalike domain mimicry with display-name spoofing.")
+            
+        # Rule B: Authentication Failures + Credential harvesting intent -> override to PHISHING
+        if (features.get("has_spf", 1) == 0 or features.get("has_dkim", 1) == 0) and nlp_intent_results["credential_harvesting"]:
+            heuristic_override = True
+            override_reasons.append("Credential harvesting email failed SPF/DKIM verification checks.")
+            
+        # Rule C: Raw IP Address destination URL + Urgency / Action intent -> override to PHISHING
+        if features.get("ip_url_count", 0) > 0 and nlp_intent_results["urgency_lure"]:
+            heuristic_override = True
+            override_reasons.append("Raw IP address redirect found in urgency call-to-action email.")
+            
+        # Rule D: URL Obfuscation (@ symbol spoof) -> override to PHISHING
+        if lexical_url_results["has_at_symbol_obfuscation"]:
+            heuristic_override = True
+            override_reasons.append("Phishing link obfuscated using authority @ symbol character.")
+
+        if heuristic_override and prediction == 0:
+            prediction = 1
+            confidence = 0.99
+            
         # Risk Score Calculation (0 to 100 scale)
         if prediction == 0:
             risk_score = max(5, int((1 - confidence) * 30))
@@ -83,9 +204,9 @@ class PredictionService:
         attack_type = "Legitimate profile"
         if prediction == 1:
             attack_type = "Business Email Compromise (BEC)"
-            if "invoice" in email_text.lower() or "billing" in email_text.lower() or "overdue" in email_text.lower() or "payment" in email_text.lower():
+            if nlp_intent_results["financial_lure"]:
                 attack_type = "Invoice Fraud"
-            elif "password" in email_text.lower() or "login" in email_text.lower() or "credentials" in email_text.lower() or "credential" in email_text.lower():
+            elif nlp_intent_results["credential_harvesting"]:
                 attack_type = "Credential Theft"
             elif "delivery" in email_text.lower() or "fedex" in email_text.lower() or "dhl" in email_text.lower() or "ups" in email_text.lower() or "shipping" in email_text.lower():
                 attack_type = "Delivery Scam"
@@ -95,8 +216,8 @@ class PredictionService:
                 attack_type = "Bank Scam"
             elif "tax" in email_text.lower() or "irs" in email_text.lower() or "refund" in email_text.lower():
                 attack_type = "Tax Scam"
-            elif "hr" in email_text.lower() or "salary" in email_text.lower() or "payroll" in email_text.lower() or "benefits" in email_text.lower() or "leave" in email_text.lower():
-                attack_type = "HR Scam"
+            elif nlp_intent_results["authority_lure"]:
+                attack_type = "Executive Impersonation"
             elif features["sender_spoofing"] > 0 or features["domain_similarity_score"] > 0.8:
                 attack_type = "Brand Mimicry / Spoofing"
 
@@ -155,6 +276,11 @@ class PredictionService:
             
             reason_str = "Clean profile validated: Secure domain names, balanced professional tone, and absence of credential lures."
         else:
+            # Add override markers if triggered
+            for o_reason in override_reasons:
+                indicators.append(f"Heuristics Triggered: {o_reason}")
+                reasons.append(f"Security Policy Check: {o_reason}")
+                
             # Generate risk indicators for phishing emails
             if features["sender_spoofing"] > 0:
                 indicators.append("Sender Display-Name Spoofing")
@@ -196,6 +322,14 @@ class PredictionService:
                 indicators.append(f"Brand Impersonation Target: {brand_name_match}")
                 reasons.append(f"Identified targeting of {brand_name_match} brand identity to gain credibility.")
                 
+            if lexical_url_results["has_login_lure_path"]:
+                indicators.append("URL Login Lure Path")
+                reasons.append("Lexical analysis detected credential login lures embedded in the URL path.")
+                
+            if nlp_intent_results["authority_lure"]:
+                indicators.append("Authority Mimicry Intent")
+                reasons.append("NLP intent scanner detected IT/Admin/Executive impersonation keywords.")
+
             if not reasons:
                 reasons.append("Matches phishing semantic templates with suspicious header patterns.")
                 indicators.append("Phishing Signature Profile")
@@ -282,7 +416,9 @@ class PredictionService:
             "model": "Random Forest (Tuned)",
             "reason": reason_str,
             "reasons": reasons,
-            "feature_contributions": feature_contributions
+            "feature_contributions": feature_contributions,
+            "lexical_url_analysis": lexical_url_results,
+            "nlp_intents": nlp_intent_results
         }
 
 prediction_service = PredictionService()

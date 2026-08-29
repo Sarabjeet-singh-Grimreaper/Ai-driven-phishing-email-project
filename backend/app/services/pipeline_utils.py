@@ -105,10 +105,33 @@ class EmailFeatureExtractor(BaseEstimator, TransformerMixin):
             money_chars = text.count('$') + text.count('€') + text.count('£') + text.lower().count('usd') + text.lower().count('transfer')
             
             # Email Headers Simulation / Parsing
-            # In standard datasets, we scan text for typical headers if they exist, or simulate if they don't
-            has_spf = 1 if re.search(r'Received-SPF:\s*pass|spf=pass', text, re.IGNORECASE) else 0
-            has_dkim = 1 if re.search(r'dkim=pass|DKIM-Signature', text, re.IGNORECASE) else 0
-            has_dmarc = 1 if re.search(r'dmarc=pass', text, re.IGNORECASE) else 0
+            # Scan text for typical headers or authentication results (DKIM, SPF, DMARC statuses)
+            has_spf = 1
+            has_dkim = 1
+            has_dmarc = 1
+
+            # Search Received-SPF or spf=
+            spf_match = re.search(r'Received-SPF:\s*(pass|fail|softfail|neutral|none|temperror|permerror)', text, re.IGNORECASE)
+            if spf_match:
+                spf_status = spf_match.group(1).lower()
+                has_spf = 1 if spf_status in ['pass'] else 0
+            else:
+                spf_inline = re.search(r'\bspf=(pass|fail|softfail|neutral|none)', text, re.IGNORECASE)
+                if spf_inline:
+                    has_spf = 1 if spf_inline.group(1).lower() == 'pass' else 0
+
+            # Search dkim= or presence of DKIM-Signature
+            dkim_inline = re.search(r'\bdkim=(pass|fail|softfail|none|neutral)', text, re.IGNORECASE)
+            if dkim_inline:
+                has_dkim = 1 if dkim_inline.group(1).lower() == 'pass' else 0
+            else:
+                # If dkim= is not explicitly present, check if there is a signature header
+                has_dkim = 1 if re.search(r'DKIM-Signature', text, re.IGNORECASE) else 0
+
+            # Search dmarc=
+            dmarc_inline = re.search(r'\bdmarc=(pass|fail|softfail|none|neutral)', text, re.IGNORECASE)
+            if dmarc_inline:
+                has_dmarc = 1 if dmarc_inline.group(1).lower() == 'pass' else 0
             
             reply_to_match = re.search(r'Reply-To:\s*([^\s@]+@[^\s@>]+)', text, re.IGNORECASE)
             from_match = re.search(r'From:\s*(?:[^<]*<)?([^\s@]+@[^\s@>]+)', text, re.IGNORECASE)

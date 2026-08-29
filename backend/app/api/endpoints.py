@@ -3,10 +3,15 @@ import io
 import time
 import logging
 import re
-from fastapi import APIRouter, File, UploadFile, HTTPException
+import uuid
+import asyncio
+from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from app.models.schemas import EmailAnalysisRequest, AnalysisResponse
+from app.models.schemas import (
+    EmailAnalysisRequest, AnalysisResponse, AsyncTaskAcceptedResponse,
+    AsyncTaskStatusResponse, BatchScanRequest, BatchScanResponse, HistoricalAnalyticsResponse
+)
 from app.services.prediction_service import prediction_service
 from app.services.pdf_generator import generate_threat_pdf
 from app.services.db import db_service
@@ -276,3 +281,88 @@ async def download_report_pdf(id: str):
     except Exception as e:
         logger.error(f"Error compiling PDF: {e}")
         raise HTTPException(status_code=500, detail=f"PDF Compilation failed: {str(e)}")
+
+BACKGROUND_TASKS_STORE = {}
+
+def run_async_scan(task_id: str, email_text: str):
+    BACKGROUND_TASKS_STORE[task_id] = {"status": "processing", "progress": 30, "result": None}
+    try:
+        result = prediction_service.predict(email_text)
+        BACKGROUND_TASKS_STORE[task_id]["progress"] = 75
+        
+        # Log to Database
+        db_id = db_service.log_scan(result)
+        
+        report_id = str(db_id)
+        result_copy = result.copy()
+        result_copy["id"] = report_id
+        SCANNED_REPORTS[report_id] = result_copy
+        
+        result["id"] = report_id
+        
+        BACKGROUND_TASKS_STORE[task_id]["result"] = result
+        BACKGROUND_TASKS_STORE[task_id]["progress"] = 100
+        BACKGROUND_TASKS_STORE[task_id]["status"] = "completed"
+    except Exception as e:
+        BACKGROUND_TASKS_STORE[task_id]["status"] = "failed"
+        BACKGROUND_TASKS_STORE[task_id]["progress"] = 100
+        BACKGROUND_TASKS_STORE[task_id]["result"] = None
+
+@router.post("/analyze-email/async", response_model=AsyncTaskAcceptedResponse, status_code=202)
+async def analyze_email_async(payload: EmailAnalysisRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    BACKGROUND_TASKS_STORE[task_id] = {"status": "pending", "progress": 10, "result": None}
+    background_tasks.add_task(run_async_scan, task_id, payload.email)
+    return {
+        "task_id": task_id,
+        "status": "pending",
+        "detail": "Email forensic scanning enqueued in background."
+    }
+
+@router.get("/analyze-email/tasks/{task_id}", response_model=AsyncTaskStatusResponse)
+async def get_async_task_status(task_id: str):
+    if task_id not in BACKGROUND_TASKS_STORE:
+        raise HTTPException(status_code=404, detail="Task not found or expired.")
+    task = BACKGROUND_TASKS_STORE[task_id]
+    return {
+        "task_id": task_id,
+        "status": task["status"],
+        "progress": task["progress"],
+        "result": task.get("result")
+    }
+
+@router.post("/analyze-email/batch", response_model=BatchScanResponse)
+async def analyze_email_batch(payload: BatchScanRequest):
+    batch_id = str(uuid.uuid4())
+    results = []
+    
+    async def process_item(item):
+        try:
+            result = await run_in_threadpool(prediction_service.predict, item.email)
+            db_id = await run_in_threadpool(db_service.log_scan, result, file_name=f"batch_{item.id}")
+            result["id"] = str(db_id)
+            return {
+                "id": item.id,
+                "status": "success",
+                "result": result,
+                "error": None
+            }
+        except Exception as e:
+            return {
+                "id": item.id,
+                "status": "failed",
+                "result": None,
+                "error": str(e)
+            }
+            
+    task_results = await asyncio.gather(*(process_item(item) for item in payload.items))
+    
+    return {
+        "batch_id": batch_id,
+        "total_processed": len(payload.items),
+        "results": task_results
+    }
+
+@router.get("/analytics/history", response_model=HistoricalAnalyticsResponse)
+async def get_historical_analytics_endpoint():
+    return await run_in_threadpool(db_service.get_historical_analytics)
