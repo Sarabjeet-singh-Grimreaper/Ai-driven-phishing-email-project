@@ -9,3 +9,5 @@ rapidocr-onnxruntime
 opencv-python-headless
 pytesseract
 Pillow
+sentence-transformers
+extract-msg
