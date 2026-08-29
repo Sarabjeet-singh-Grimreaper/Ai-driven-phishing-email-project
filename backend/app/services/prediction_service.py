@@ -350,58 +350,73 @@ class PredictionService:
                 flags=re.IGNORECASE
             )
             
-        # 2. Password/Credentials: Orange
+        # 1. Extract and replace URLs with placeholders to prevent nesting and quoting leaks
+        urls = re.findall(r'(https?://\S+|www\.\S+)', highlighted_email, flags=re.IGNORECASE)
+        for i, url in enumerate(urls):
+            highlighted_email = highlighted_email.replace(url, f"__URL_PLACEHOLDER_{i}__")
+
+        # Safely escape basic characters
+        highlighted_email = highlighted_email.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        # 2. Brands: Green
+        for brand in BRANDS:
+            highlighted_email = re.sub(
+                f"\\b({brand})\\b", 
+                r"<mark style='background-color: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 4px; border-radius: 6px; font-weight: bold;'>\1</mark>", 
+                highlighted_email, 
+                flags=re.IGNORECASE
+            )
+            
+        # 3. Password/Credentials: Orange
         password_terms = ['password', 'credential', 'credentials', 'login', 'user', 'verify', 'verification', 'account', 'signin', 'reset', 'auth']
         for term in password_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(249, 115, 22, 0.15); color: #f97316; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 4px; border-radius: 6px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
             
-        # 3. OTP: Blue
+        # 4. OTP: Blue
         otp_terms = ['mfa', '2fa', 'otp', 'authenticator', 'passcode', 'one-time', 'token']
         for term in otp_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(6, 182, 212, 0.15); color: #06b6d4; padding: 2px 4px; border-radius: 6px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
             
-        # 4. Money: Purple
+        # 5. Money: Purple
         money_terms = ['usd', 'transfer', 'wire', 'payment', 'invoice', 'salary', 'payroll', 'refund', 'billing', 'cost', 'fee', 'price']
         for term in money_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(168, 85, 247, 0.15); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(168, 85, 247, 0.15); color: #a855f7; padding: 2px 4px; border-radius: 6px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
         highlighted_email = re.sub(
             r'([\$€£¥])',
-            r"<mark style='background-color: rgba(168, 85, 247, 0.15); color: #a855f7; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
+            r"<mark style='background-color: rgba(168, 85, 247, 0.15); color: #a855f7; padding: 2px 4px; border-radius: 6px; font-weight: bold;'>\1</mark>",
             highlighted_email
         )
         
-        # 5. Urgency: Pink
+        # 6. Urgency: Red
         urgency_terms = ['urgent', 'suspend', 'immediately', 'action', 'alert', 'compromised', 'restricted', 'attention', 'required', 'deactivate', 'block']
         for term in urgency_terms:
             highlighted_email = re.sub(
                 f"\\b({term})\\b", 
-                r"<mark style='background-color: rgba(219, 39, 119, 0.15); color: #db2777; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>", 
+                r"<mark style='background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 6px; font-weight: bold;'>\1</mark>", 
                 highlighted_email, 
                 flags=re.IGNORECASE
             )
-            
-        # 6. URLs: Red
-        highlighted_email = re.sub(
-            r'(?<!color:\s)(https?://\S+|www\.\S+)',
-            r"<mark style='background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 4px; font-weight: bold;'>\1</mark>",
-            highlighted_email,
-            flags=re.IGNORECASE
-        )
+
+        # 7. Restore and wrap URLs in Red tag
+        for i, url in enumerate(urls):
+            safe_url = url.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            url_html = f"<mark style='background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 6px; font-weight: bold; font-family: monospace;'>{safe_url}</mark>"
+            highlighted_email = highlighted_email.replace(f"__URL_PLACEHOLDER_{i}__", url_html)
         
         highlighted_email = highlighted_email.replace("\n", "<br>")
 
