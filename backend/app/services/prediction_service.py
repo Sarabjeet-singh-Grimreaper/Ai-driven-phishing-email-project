@@ -44,8 +44,27 @@ class PredictionService:
         if not self.model or not self.scaler:
             raise RuntimeError("Model services are not fully initialized. Please run training pipeline first.")
 
-        if not email_text or not email_text.strip():
-            raise ValueError("Input email text is empty.")
+        if not email_text or not isinstance(email_text, str) or not email_text.strip():
+            return {
+                "prediction": "SAFE",
+                "confidence": 100.0,
+                "risk_score": 0,
+                "attack_type": "None",
+                "severity": "Low",
+                "indicators": [],
+                "highlighted_email": "",
+                "model": "Calibrated Hybrid Booster",
+                "reason": "Empty input provided.",
+                "reasons": ["Empty input provided."],
+                "feature_contributions": {"brand_name": "None"},
+                "lexical_url_analysis": {},
+                "nlp_intents": {
+                    "credential_harvesting": False,
+                    "urgency_lure": False,
+                    "brand_spoofing": False
+                },
+                "flagged_tokens": []
+            }
 
         # 1. Tabular features extraction
         meta_feats_dict = self.extractor.extract_features(email_text)
