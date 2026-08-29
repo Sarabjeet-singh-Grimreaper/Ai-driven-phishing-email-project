@@ -4,6 +4,7 @@ import time
 import logging
 import re
 from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from app.models.schemas import EmailAnalysisRequest, AnalysisResponse
 from app.services.prediction_service import prediction_service
@@ -85,10 +86,10 @@ async def analyze_email(payload: EmailAnalysisRequest):
         raise HTTPException(status_code=400, detail="Email contains only HTML tags with no extractable text content.")
         
     try:
-        result = prediction_service.predict(email_text)
+        result = await run_in_threadpool(prediction_service.predict, email_text)
         
         # Log to Database
-        db_id = db_service.log_scan(result)
+        db_id = await run_in_threadpool(db_service.log_scan, result)
         
         # Store for reports lookup
         report_id = str(db_id)
@@ -125,11 +126,11 @@ async def upload_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Unsupported image format. Upload PNG, JPG, or GIF.")
 
     try:
-        extracted_text = perform_ocr(content)
-        result = prediction_service.predict(extracted_text)
+        extracted_text = await run_in_threadpool(perform_ocr, content)
+        result = await run_in_threadpool(prediction_service.predict, extracted_text)
         
         # Log to Database
-        db_id = db_service.log_scan(result, file_name=file.filename)
+        db_id = await run_in_threadpool(db_service.log_scan, result, file_name=file.filename)
         
         report_id = str(db_id)
         result_copy = result.copy()
@@ -150,15 +151,15 @@ async def upload_image(file: UploadFile = File(...)):
 
 @router.get("/dashboard")
 async def get_dashboard():
-    return db_service.get_stats()
+    return await run_in_threadpool(db_service.get_stats)
 
 @router.get("/threat-feed")
 async def get_threat_feed():
-    return db_service.get_threat_feed()
+    return await run_in_threadpool(db_service.get_threat_feed)
 
 @router.get("/history")
 async def get_history():
-    return db_service.get_history()
+    return await run_in_threadpool(db_service.get_history)
 
 @router.get("/models")
 async def get_models():
@@ -209,15 +210,10 @@ async def get_models():
         }
     ]
 
-@router.get("/report/{id}")
-async def get_report(id: str):
-    if id in SCANNED_REPORTS:
-        return SCANNED_REPORTS[id]
-        
-    # Check Database as fallback
+def fetch_report_from_db(report_id: str):
     try:
         with db_service.get_connection() as conn:
-            row = conn.execute("SELECT * FROM scan_history WHERE id = ?", (int(id),)).fetchone()
+            row = conn.execute("SELECT * FROM scan_history WHERE id = ?", (int(report_id),)).fetchone()
             if row:
                 import json
                 item = dict(row)
@@ -225,6 +221,17 @@ async def get_report(id: str):
                 return item
     except Exception:
         pass
+    return None
+
+@router.get("/report/{id}")
+async def get_report(id: str):
+    if id in SCANNED_REPORTS:
+        return SCANNED_REPORTS[id]
+        
+    # Check Database as fallback via threadpool
+    item = await run_in_threadpool(fetch_report_from_db, id)
+    if item:
+        return item
         
     return {
         "prediction": "PHISHING",
@@ -243,15 +250,7 @@ async def get_report(id: str):
 async def download_report_pdf(id: str):
     report_data = SCANNED_REPORTS.get(id)
     if not report_data:
-        try:
-            with db_service.get_connection() as conn:
-                row = conn.execute("SELECT * FROM scan_history WHERE id = ?", (int(id),)).fetchone()
-                if row:
-                    import json
-                    report_data = dict(row)
-                    report_data["indicators"] = json.loads(report_data["indicators"])
-        except Exception:
-            pass
+        report_data = await run_in_threadpool(fetch_report_from_db, id)
             
     if not report_data:
         report_data = {
@@ -268,7 +267,7 @@ async def download_report_pdf(id: str):
         }
         
     try:
-        pdf_content = generate_threat_pdf(report_data)
+        pdf_content = await run_in_threadpool(generate_threat_pdf, report_data)
         return StreamingResponse(
             io.BytesIO(pdf_content),
             media_type="application/pdf",
