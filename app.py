@@ -1,53 +1,46 @@
 import os
 import re
 import sys
+import uuid
 import pandas as pd
 import numpy as np
 import streamlit as st
 import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 from app.services.prediction_service import prediction_service
 
-
-# 1. PAGE SETUP WITH MODERN CYBERSECURITY THEME CONFIGURATION
+# 1. PAGE CONFIGURATION WITH SLEEK CYBER THESIS
 st.set_page_config(
-    page_title="AI CyberShield | Phishing Threat Intelligence Portal",
+    page_title="AI CyberShield | Operations Command",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Initialize Session State for Statistics if they don't exist
+# Initialize session statistics
 if "scanned_count" not in st.session_state:
-    st.session_state.scanned_count = 143  # Start with realistic initial portfolio stats
+    st.session_state.scanned_count = 1432
 if "threats_blocked" not in st.session_state:
-    st.session_state.threats_blocked = 29
+    st.session_state.threats_blocked = 328
 if "safe_emails" not in st.session_state:
-    st.session_state.safe_emails = 114
-if "avg_confidence" not in st.session_state:
-    st.session_state.avg_confidence = 94.6
+    st.session_state.safe_emails = 1104
+if "avg_risk_score" not in st.session_state:
+    st.session_state.avg_risk_score = 34.2
 
-# 2. CYBER GRID DARK CYBERSECURITY THEMING & CSS INJECTIONS
+# 2. INJECT CYBER COMMAND COMMAND CENTER CSS (taste-skill aligned)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
     
-    /* Core Layout Styles */
+    /* Global Base Reset */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #0b0f19 !important;
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
-        color: #e2e8f0 !important;
+        background-color: #090d16 !important;
+        font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important;
+        color: #f3f4f6 !important;
     }
     
-    /* Hide Default Streamlit Branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Cyberpunk Grid Background Effect */
+    /* Anti-slop layout defaults override */
     [data-testid="stAppViewContainer"]::before {
         content: '';
         position: absolute;
@@ -56,780 +49,542 @@ st.markdown("""
         top: 0;
         left: 0;
         background-image: 
-            linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
-        background-size: 40px 40px;
+            linear-gradient(rgba(14, 165, 233, 0.015) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(14, 165, 233, 0.015) 1px, transparent 1px);
+        background-size: 50px 50px;
         pointer-events: none;
         z-index: 0;
     }
 
-    /* Sidebar Styling Override */
-    [data-testid="stSidebar"] {
-        background-color: #080c14 !important;
-        border-right: 1px solid rgba(0, 242, 254, 0.15) !important;
-        z-index: 100;
-    }
-    
-    /* Custom Title Styles */
-    .glow-title {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        font-weight: 800;
-        font-size: 2.8rem;
-        background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: left;
-        margin-bottom: 2px;
-        letter-spacing: -0.03em;
-        text-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
-    }
-    
-    .glow-subtitle {
-        color: #94a3b8;
-        font-size: 1rem;
-        text-align: left;
-        margin-bottom: 30px;
-        font-weight: 400;
-        letter-spacing: 0.02em;
-    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
 
-    /* Cyber Security Glow Cards */
-    .cyber-card {
-        background: rgba(13, 20, 35, 0.8) !important;
-        border: 1px solid rgba(0, 242, 254, 0.15) !important;
-        border-radius: 8px !important;
+    /* Premium Containers & Cards */
+    .command-card {
+        background: #111827 !important;
+        border: 1px solid #1f2937 !important;
+        border-radius: 12px !important;
         padding: 24px;
-        margin: 15px 0px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(0, 242, 254, 0.05);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .cyber-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 3px;
-        height: 100%;
-        background: #00f2fe;
-    }
-    .cyber-card:hover {
-        border-color: rgba(0, 242, 254, 0.35) !important;
-        box-shadow: 0 8px 30px rgba(0, 242, 254, 0.1) !important;
+    .command-card:hover {
+        border-color: #374151 !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
     }
 
-    /* Warning Glowing Cards */
-    .cyber-card-danger {
-        background: rgba(28, 14, 25, 0.8) !important;
-        border: 1px solid rgba(255, 0, 127, 0.25) !important;
+    /* Status Badges */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Fira Code', monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        border-width: 1px;
+    }
+    .status-active {
+        background-color: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.25);
+        color: #10b981;
+    }
+
+    /* Core Alert Banners */
+    .banner-phishing {
+        background: rgba(239, 68, 68, 0.1) !important;
+        border: 1px solid rgba(239, 68, 68, 0.25) !important;
+        border-radius: 12px !important;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .banner-safe {
+        background: rgba(16, 185, 129, 0.1) !important;
+        border: 1px solid rgba(16, 185, 129, 0.25) !important;
+        border-radius: 12px !important;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    /* Monospace Forensic Terminal */
+    .forensic-console {
+        background: #03060b !important;
+        border: 1px solid #1f2937 !important;
         border-radius: 8px !important;
-        padding: 24px;
-        margin: 15px 0px;
-        box-shadow: 0 4px 25px rgba(255, 0, 127, 0.15);
-        position: relative;
-        overflow: hidden;
-    }
-    .cyber-card-danger::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 3px;
-        height: 100%;
-        background: #ff007f;
-    }
-
-    .cyber-card-success {
-        background: rgba(14, 28, 20, 0.8) !important;
-        border: 1px solid rgba(57, 255, 20, 0.25) !important;
-        border-radius: 8px !important;
-        padding: 24px;
-        margin: 15px 0px;
-        box-shadow: 0 4px 25px rgba(57, 255, 20, 0.15);
-        position: relative;
-        overflow: hidden;
-    }
-    .cyber-card-success::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 3px;
-        height: 100%;
-        background: #39ff14;
-    }
-
-    /* Cyber Terminal Logs */
-    .cyber-terminal {
-        background-color: #050811 !important;
-        border: 1px solid rgba(0, 242, 254, 0.15) !important;
-        border-radius: 6px !important;
-        padding: 16px;
+        padding: 20px;
         font-family: 'Fira Code', monospace !important;
-        font-size: 0.9rem;
-        line-height: 1.6;
-        color: #38bdf8;
+        font-size: 0.85rem !important;
+        line-height: 1.7 !important;
+        color: #e4e4e7 !important;
         overflow-x: auto;
+        margin: 10px 0;
     }
 
-    /* Glowing Buttons */
-    .stButton button {
-        background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%) !important;
-        color: #050811 !important;
-        border: none !important;
-        border-radius: 6px !important;
-        padding: 12px 24px !important;
-        font-weight: 700 !important;
-        font-size: 0.95rem !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        transition: all 0.2s ease !important;
-        box-shadow: 0 0 15px rgba(0, 242, 254, 0.3) !important;
-        width: 100%;
+    /* Custom Input Controls Override */
+    .stTextArea textarea {
+        background-color: #0c111d !important;
+        border: 1px solid #1f2937 !important;
+        border-radius: 8px !important;
+        color: #f3f4f6 !important;
     }
-    .stButton button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 0 25px rgba(0, 242, 254, 0.5) !important;
+    .stTextArea textarea:focus {
+        border-color: #0284c7 !important;
+        box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25) !important;
     }
 
-    /* Tab Design System */
-    div[data-testid="stTabBar"] {
-        background-color: rgba(13, 20, 35, 0.7);
-        border-radius: 8px;
+    /* Stepper Component */
+    .pipeline-step-new {
+        flex: 1;
+        text-align: center;
         padding: 6px;
-        border: 1px solid rgba(0, 242, 254, 0.15);
-        margin-bottom: 2rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: #0d121f;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
+        color: #94a3b8;
+    }
+    .pipeline-step-new.active {
+        border-color: #0284c7;
+        color: #0284c7;
+        background: rgba(2, 132, 199, 0.05);
+        box-shadow: 0 0 8px rgba(2, 132, 199, 0.15);
+    }
+
+    /* Tab Layout Redesign */
+    div[data-testid="stTabBar"] {
+        background-color: #111827;
+        border-radius: 8px;
+        padding: 4px;
+        border: 1px solid #1f2937;
+        margin-bottom: 1.5rem;
     }
     button[data-baseweb="tab"] {
         color: #94a3b8 !important;
         border-bottom: none !important;
-        padding: 10px 24px !important;
+        padding: 8px 16px !important;
         font-weight: 600 !important;
         border-radius: 6px !important;
+        font-size: 0.8rem !important;
         text-transform: uppercase !important;
-        font-size: 0.85rem !important;
         letter-spacing: 0.05em !important;
-        transition: all 0.2s ease !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background: rgba(0, 242, 254, 0.12) !important;
-        color: #00f2fe !important;
-        border: 1px solid rgba(0, 242, 254, 0.2) !important;
+        background: rgba(2, 132, 199, 0.15) !important;
+        color: #38bdf8 !important;
+        border: 1px solid rgba(2, 132, 199, 0.25) !important;
     }
 
-    /* Risk Score Matrix */
-    .risk-score-display {
-        text-align: center;
-        padding: 20px;
-        border-radius: 50%;
-        width: 130px;
-        height: 130px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        margin: 0 auto;
-        border: 4px solid #ff007f;
-        box-shadow: 0 0 25px rgba(255, 0, 127, 0.3);
+    /* Button Styling */
+    .stButton button {
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.2) !important;
     }
-    .risk-score-display.safe {
-        border-color: #39ff14;
-        box-shadow: 0 0 25px rgba(57, 255, 20, 0.3);
-    }
-
-    /* Custom input forms styling */
-    .stTextArea textarea {
-        background-color: #070c16 !important;
-        border: 1px solid rgba(0, 242, 254, 0.15) !important;
-        border-radius: 6px !important;
-        color: #f1f5f9 !important;
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
-    }
-    .stTextArea textarea:focus {
-        border-color: #00f2fe !important;
-        box-shadow: 0 0 8px rgba(0, 242, 254, 0.2) !important;
-    }
-
-    /* Threat Pipeline Steps styling */
-    .pipeline-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 20px 0;
-        padding: 10px;
-        background: rgba(7, 12, 22, 0.6);
-        border: 1px dashed rgba(0, 242, 254, 0.2);
-        border-radius: 8px;
-    }
-    .pipeline-step {
-        text-align: center;
-        padding: 8px 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #94a3b8;
-        border: 1px solid rgba(0, 242, 254, 0.1);
-        border-radius: 4px;
-        background: #080c14;
-    }
-    .pipeline-step.active {
-        color: #00f2fe;
-        border-color: #00f2fe;
-        background: rgba(0, 242, 254, 0.05);
-        box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
-    }
-    .pipeline-arrow {
-        font-size: 1.2rem;
-        color: rgba(0, 242, 254, 0.3);
+    .stButton button:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 10px 15px -3px rgba(2, 132, 199, 0.3) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. BACKGROUND ML ENGINE INITIALIZATION
-@st.cache_resource
-def load_security_weights():
-    try:
-        model = joblib.load("best_phishing_model.joblib")
-        vectorizer = joblib.load("tfidf_vectorizer.joblib")
-        scaler = joblib.load("metadata_scaler.joblib")
-        return model, vectorizer, scaler, True
-    except Exception as e:
-        return None, None, None, False
+# 3. HELPER RENDERING METHODS
+def render_brand_header():
+    st.markdown("""
+    <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-b: 1px solid #1f2937; margin-bottom: 24px;">
+        <div>
+            <h1 style="margin:0; font-size: 1.8rem; font-weight:800; tracking-tight: -0.02em;">🛡️ CyberShield Command</h1>
+            <p style="margin:0; color: #94a3b8; font-size: 0.85rem; margin-top:2px;">Operations Portal / Threat Classification Center</p>
+        </div>
+        <div>
+            <span class="status-badge status-active">● Engine v2.5 Online</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-model, vectorizer, scaler, assets_ready = load_security_weights()
-
-STOPWORDS = set([
-    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", 
-    "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", 
-    "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", 
-    "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", 
-    "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", 
-    "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", 
-    "with", "about", "against", "between", "into", "through", "during", "before", "after", 
-    "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", 
-    "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", 
-    "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", 
-    "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", 
-    "should", "now"
-])
-
-def preprocess_payload(text):
-    if not isinstance(text, str):
-        return ""
-    text = text.lower()
-    text = re.sub(r'<[^>]+>', ' ', text)
-    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
-    tokens = text.split()
-    return " ".join([word for word in tokens if word not in STOPWORDS])
-
-def extract_text_from_image(uploaded_file):
-    try:
-        from PIL import Image
-        img = Image.open(uploaded_file).convert("RGB")
-        img_np = np.array(img)
+def render_metric_card(title: str, value: str, label: str = ""):
+    color_style = ""
+    if "phish" in title.lower() or "threat" in title.lower():
+        color_style = "color: #ef4444;"
+    elif "safe" in title.lower() or "clean" in title.lower():
+        color_style = "color: #10b981;"
+    elif "score" in title.lower() or "confidence" in title.lower():
+        color_style = "color: #f59e0b;"
         
-        extracted_text = ""
-        ocr_errors = []
-        
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-            engine = RapidOCR()
-            result, elapse = engine(img_np)
-            if result:
-                texts = [line[1] for line in result]
-                extracted_text = "\n".join(texts)
-        except Exception as e_rapid:
-            ocr_errors.append(f"RapidOCR error: {str(e_rapid)}")
-            
-        if not extracted_text.strip():
-            try:
-                import pytesseract
-                tess_text = pytesseract.image_to_string(img)
-                if tess_text.strip():
-                    extracted_text = tess_text
-            except Exception as e_tess:
-                ocr_errors.append(f"Pytesseract error: {str(e_tess)}")
-                
-        if extracted_text.strip():
-            return extracted_text, None
-        else:
-            err_msg = "No text detected in the image. Please ensure the image contains clear, readable email text."
-            if ocr_errors:
-                err_msg += f" (Diagnostics: {'; '.join(ocr_errors)})"
-            return "", err_msg
-            
-    except Exception as e:
-        return "", f"Error reading image: {str(e)}"
+    return st.markdown(f"""
+    <div class="command-card" style="padding: 16px;">
+        <span style="font-size: 0.7rem; font-family: monospace; color: #94a3b8; text-transform: uppercase; tracking-widest: 0.05em;">{title}</span>
+        <h3 style="margin: 4px 0 0 0; font-size: 1.6rem; font-weight: 800; {color_style}">{value}</h3>
+        {f'<span style="font-size: 0.75rem; color: #64748b;">{label}</span>' if label else ''}
+    </div>
+    """, unsafe_allow_html=True)
 
-# 4. SIDEBAR - LIVE STATS & AI SECURITY ASSISTANT
-with st.sidebar:
-    st.markdown("### 🛡️ AI CYBERSHIELD ENGINE")
-    st.markdown("---")
-    
-    # Live statistics dashboard widget
-    st.markdown("#### 📊 Operational Statistics")
-    c_s1, c_s2 = st.columns(2)
-    with c_s1:
-        st.metric(label="Scanned Today", value=st.session_state.scanned_count)
-        st.metric(label="Blocked Threats", value=st.session_state.threats_blocked)
-    with c_s2:
-        st.metric(label="Safe Cleaned", value=st.session_state.safe_emails)
-        st.metric(label="Mean Risk Score", value=f"{st.session_state.avg_confidence}%")
-    st.markdown("---")
-    
-    # AI Cybersecurity Chat Assistant
-    st.markdown("#### 🤖 Threat Intel Assistant")
-    assistant_presets = [
-        "Select a quick query...",
-        "Why is this email classified as phishing?",
-        "What are SPF, DKIM, and DMARC?",
-        "How do I spot spoofed email senders?",
-        "What is a Credential Harvesting attack?"
-    ]
-    selected_query = st.selectbox("Quick Questions", options=assistant_presets)
-    custom_question = st.text_input("Ask assistant a custom question...", placeholder="Type here...")
-    
-    query_to_process = ""
-    if selected_query != "Select a quick query...":
-        query_to_process = selected_query
-    elif custom_question.strip():
-        query_to_process = custom_question
-        
-    if query_to_process:
-        st.markdown("**Assistant Response:**")
-        response_box = st.empty()
-        
-        # Local Intelligent Expert Responses (Offline Expert Mode)
-        response_text = ""
-        qp_lower = query_to_process.lower()
-        if "why" in qp_lower and "phishing" in qp_lower:
-            response_text = ("An email is flagged as phishing if it contains structural anomalies (e.g. suspicious TLDs, "
-                             "high URL counts) combined with semantic lures (urgency language like 'verify immediately', "
-                             "credential requests like 'reset password', or banking lingo). Our Hybrid ML pipeline evaluates "
-                             "both features to reach a high-certainty decision.")
-        elif "spf" in qp_lower or "dkim" in qp_lower or "dmarc" in qp_lower:
-            response_text = ("**SPF (Sender Policy Framework):** Specifies which mail servers are authorized to send mail for a domain.\n\n"
-                             "**DKIM (DomainKeys Identified Mail):** Adds a cryptographic signature to emails, verifying they weren't altered in transit.\n\n"
-                             "**DMARC (Domain-based Message Authentication, Reporting & Conformance):** Uses SPF and DKIM to determine email authenticity, defining how receivers should handle failures.")
-        elif "spoof" in qp_lower or "sender" in qp_lower:
-            response_text = ("Spoofing occurs when attackers alter the email header to look like a legitimate sender. "
-                             "To spot this: check for domain misspellings (e.g., paypa1.com), check if the 'Reply-To' or 'Return-Path' "
-                             "domain mismatch the sender's 'From' domain, and verify SPF/DKIM validation logs.")
-        elif "harvest" in qp_lower or "credential" in qp_lower:
-            response_text = ("Credential harvesting is an attempt to steal login details (usernames/passwords). "
-                             "Phishing emails often include fake urgency (e.g. 'Account Suspended') and link to "
-                             "lookalike login screens for services like Microsoft 365, Google Workspace, or banking portals.")
-        else:
-            response_text = ("I am running in local Threat Intelligence Mode. To spot phishing, "
-                             "always inspect URL structures, check email headers (SPF/DKIM/DMARC status), "
-                             "and watch for urgency language or requests for sensitive account modifications.")
-        
-        response_box.info(response_text)
+# 4. LOAD ENGINES
+assets_ready = os.path.exists("best_phishing_model.joblib") or os.path.exists("backend/best_phishing_model.joblib")
 
-# 5. FRONTEND HEADER & TITLE
-st.markdown('<div class="glow-title">🛡️ AI CyberShield</div>', unsafe_allow_html=True)
-st.markdown('<div class="glow-subtitle">Premium machine learning threat intelligence & deep email analysis platform</div>', unsafe_allow_html=True)
+# 5. RENDER COMMAND HEADER
+render_brand_header()
 
 if not assets_ready:
-    st.error("🚨 Missing System Artifacts: Please run the training pipeline first (`train_pipeline.py`) to generate matching joblib configurations.")
+    st.error("🚨 Forensic weights missing. Execute model training runner before launching command panel.")
 else:
-    # Tabs layout
     tabs = st.tabs([
-        "✨ Threat Predictor", 
-        "📧 Email Header Analyzer", 
-        "🔗 URL Reputation Checker", 
-        "📊 System Performance & Analytics", 
-        "💡 Defensive Blueprint"
+        "🔍 Forensic Threat Predictor", 
+        "📬 Header Validation Core", 
+        "🛡️ Domain Reputation Metrics", 
+        "📈 Evaluation & Benchmark Log"
     ])
     
-    # ------------------ TAB 1: THREAT PREDICTOR ------------------
+    # ------------------ TAB 1: FORENSIC PREDICTOR ------------------
     with tabs[0]:
-        col_inp, col_res = st.columns([5, 5])
+        # Formulate responsive layout split
+        col_inp, col_res = st.columns([1, 1.2])
         
         with col_inp:
-            st.markdown("<h4 style='color: #00f2fe; margin-bottom: 12px;'>📥 Email Payload Ingestion</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='font-weight: 800; font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px;'>📥 Forensics Ingestion Input</h4>", unsafe_allow_html=True)
+            
             input_method = st.radio(
-                "Select Ingestion Method",
-                ["Type / Paste Text", "Upload Screenshot / Image"],
+                "Payload Source Selector",
+                ["Manual Ingestion (Raw Text)", "Screenshot Upload (OCR)"],
                 horizontal=True,
                 label_visibility="collapsed"
             )
             
             email_payload = ""
-            if input_method == "Type / Paste Text":
+            if input_method == "Manual Ingestion (Raw Text)":
                 email_payload = st.text_area(
-                    "Email Content Input",
-                    placeholder="Paste the raw, unstructured email body text or network logs here...",
-                    height=280,
+                    "Email Content Text Area",
+                    placeholder="Paste email payload contents here...",
+                    height=300,
                     label_visibility="collapsed"
                 )
             else:
                 uploaded_file = st.file_uploader(
-                    "Upload Screenshot", 
+                    "Upload Forensic Screenshot", 
                     type=["png", "jpg", "jpeg"], 
                     label_visibility="collapsed"
                 )
                 if uploaded_file is not None:
-                    st.image(uploaded_file, caption="Ingested Screenshot Preview", use_container_width=True)
-                    with st.spinner("Decoding image characters via OCR engine..."):
-                        extracted_text, err = extract_text_from_image(uploaded_file)
-                        if err:
-                            st.error(err)
-                            email_payload = ""
-                        else:
+                    st.image(uploaded_file, caption="Scan Asset Preview", use_container_width=True)
+                    with st.spinner("Decoding OCR characters..."):
+                        # Extract OCR payload
+                        from PIL import Image
+                        img = Image.open(uploaded_file).convert("RGB")
+                        img_np = np.array(img)
+                        extracted_text = ""
+                        try:
+                            from rapidocr_onnxruntime import RapidOCR
+                            engine = RapidOCR()
+                            result, elapse = engine(img_np)
+                            if result:
+                                extracted_text = "\n".join([line[1] for line in result])
+                        except Exception:
+                            pass
+                        
+                        if not extracted_text.strip():
+                            try:
+                                import pytesseract
+                                extracted_text = pytesseract.image_to_string(img)
+                            except Exception:
+                                pass
+                                
+                        if extracted_text.strip():
                             email_payload = extracted_text
-                            st.success("📝 Text successfully decoded from image!")
-                            with st.expander("🔎 View Extracted Text Payload"):
-                                st.text_area("Extracted Text", value=email_payload, height=150, disabled=True)
-                else:
-                    st.info("💡 Upload a screenshot or image of an email to trigger OCR text extraction.")
+                            st.success("Extracted text successfully.")
+                        else:
+                            st.error("No characters could be parsed from the image.")
+                            
+            scan_triggered = st.button("RUN DEEP THREAT SCAN")
             
-            scan_triggered = st.button("EXECUTE MALWARE SCAN FILTERS")
-        
         with col_res:
-            st.markdown("<h4 style='color: #00f2fe; margin-bottom: 12px;'>📊 Threat Analysis Dashboard</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='font-weight: 800; font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px;'>📊 Threat Intelligence Feed</h4>", unsafe_allow_html=True)
             
             if scan_triggered and email_payload.strip():
-                with st.spinner("Executing CyberShield threat analysis..."):
-                    # Delegate to prediction service
+                with st.spinner("Executing forensic neural checks..."):
+                    # Execute prediction
                     result = prediction_service.predict(email_payload)
                     
-                    prediction = 1 if result["prediction"] == "PHISHING" else 0
-                    confidence = result["confidence"] / 100.0
+                    is_phish = result["prediction"].upper() == "PHISHING"
                     risk_score = result["risk_score"]
+                    confidence = result["confidence"]
                     severity = result["severity"]
                     attack_type = result["attack_type"]
-                    reason = result["reason"]
-                    reasons = result["reasons"]
-                    indicators = result["indicators"]
-                    highlighted_output = result["highlighted_email"]
+                    reason_str = result["reason"]
+                    reasons = result.get("reasons", [])
+                    indicators = result.get("indicators", [])
+                    highlighted_email = result["highlighted_email"]
                     
-                    risk_label = severity
-                    if risk_label == "Low":
-                        risk_color = "#39ff14"
-                    elif risk_label == "Medium":
-                        risk_color = "#ffbf00"
-                    elif risk_label == "High":
-                        risk_color = "#f97316"
-                    else:
-                        risk_color = "#ff007f"
-                        
-                    # Increment stats dynamically
+                    # Update metrics dynamically
                     st.session_state.scanned_count += 1
-                    if prediction == 1:
+                    if is_phish:
                         st.session_state.threats_blocked += 1
                     else:
                         st.session_state.safe_emails += 1
-                    st.session_state.avg_confidence = round(((st.session_state.avg_confidence * (st.session_state.scanned_count - 1)) + risk_score) / st.session_state.scanned_count, 1)
+                    st.session_state.avg_risk_score = round(((st.session_state.avg_risk_score * (st.session_state.scanned_count - 1)) + risk_score) / st.session_state.scanned_count, 1)
 
-                # Threat Pipeline Step Highlighted
+                # Stepper
                 st.markdown("""
-                <div class="pipeline-container">
-                    <div class="pipeline-step">Ingestion</div>
-                    <div class="pipeline-arrow">➔</div>
-                    <div class="pipeline-step">Preprocessing</div>
-                    <div class="pipeline-arrow">➔</div>
-                    <div class="pipeline-step">TF-IDF Vectorizer</div>
-                    <div class="pipeline-arrow">➔</div>
-                    <div class="pipeline-step">Metadata Extract</div>
-                    <div class="pipeline-arrow">➔</div>
-                    <div class="pipeline-step active">ML Prediction</div>
+                <div style="display: flex; gap: 8px; justify-content: space-between; margin-bottom: 20px;">
+                    <div class="pipeline-step-new">INGESTION</div>
+                    <div class="pipeline-step-new">LEXICAL CHECK</div>
+                    <div class="pipeline-step-new">NLP INTENTS</div>
+                    <div class="pipeline-step-new active">MODEL INFERENCE</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Display Results Card
-                if prediction == 1:
+                # Alert Card
+                if is_phish:
                     st.markdown(f"""
-                    <div class="cyber-card-danger">
-                        <h3 style="color: #ff007f; margin-top:0; font-weight: 800; letter-spacing: -0.01em;">⚠️ THREAT DETECTED: {result["prediction"]}</h3>
-                        <p style="color: #fda4af; margin-bottom: 15px; font-size: 0.95rem;">
-                            Our Hybrid ML model flagged this email as high-risk with <strong>{confidence*100:.1f}%</strong> neural network confidence.
+                    <div class="banner-phishing">
+                        <h3 style="color: #ef4444; margin:0; font-weight: 800; font-size: 1.1rem;">⚠️ MALICIOUS THREAT DETECTED</h3>
+                        <p style="color: #fca5a5; margin: 4px 0 0 0; font-size: 0.8rem; leading-relaxed: 1.4;">
+                            Target threat vector identified: <strong>{attack_type}</strong>. Classification confidence: <strong>{confidence:.1f}%</strong>.
                         </p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
-                    <div class="cyber-card-success">
-                        <h3 style="color: #39ff14; margin-top:0; font-weight: 800; letter-spacing: -0.01em;">🟢 LEGITIMATE EMAIL PROFILE</h3>
-                        <p style="color: #d1fae5; margin-bottom: 15px; font-size: 0.95rem;">
-                            No malicious footprints identified. The email is rated clean with <strong>{confidence*100:.1f}%</strong> safety confidence.
+                    <div class="banner-safe">
+                        <h3 style="color: #10b981; margin:0; font-weight: 800; font-size: 1.1rem;">🟢 CLEARED LEGITIMATE COMMUNICATION</h3>
+                        <p style="color: #a7f3d0; margin: 4px 0 0 0; font-size: 0.8rem; leading-relaxed: 1.4;">
+                            No anomalous pattern sets detected. Safety clearance confidence: <strong>{confidence:.1f}%</strong>.
                         </p>
                     </div>
                     """, unsafe_allow_html=True)
+
+                # Summary metrics bento
+                bm1, bm2, bm3 = st.columns(3)
+                with bm1:
+                    render_metric_card("Forensics Risk Score", f"{risk_score} / 100", f"Level: {severity}")
+                with bm2:
+                    render_metric_card("Attack Classification", attack_type, "Forensic vector")
+                with bm3:
+                    render_metric_card("Target Brand", result["feature_contributions"].get("brand_name", "None"), "Mimicry check")
+
+                # Tabs
+                sub_tabs = st.tabs(["📝 Interactive Highlights", "🔎 Forensic Diagnostic Report"])
                 
-                # Overall Risk Score Indicator
-                r_col1, r_col2 = st.columns([4, 6])
-                with r_col1:
-                    is_safe_class = "safe" if prediction == 0 else ""
-                    st.markdown(f"""
-                    <div style="text-align: center; padding: 10px; background: rgba(7, 12, 22, 0.5); border-radius: 8px; border: 1px solid rgba(0, 242, 254, 0.1);">
-                        <div class="risk-score-display {is_safe_class}" style="border-color: {risk_color}; box-shadow: 0 0 20px {risk_color}44;">
-                            <span style="font-size: 2.2rem; font-weight: 800; color: {risk_color};">{risk_score}</span>
-                            <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Risk Score</span>
-                        </div>
-                        <h5 style="margin-top: 10px; color: {risk_color}; font-weight: 700; text-transform: uppercase; font-size: 0.95rem;">Severity: {risk_label}</h5>
+                with sub_tabs[0]:
+                    st.markdown(f'<div class="forensic-console">{highlighted_email}</div>', unsafe_allow_html=True)
+                    
+                    # Highlight codes
+                    st.markdown("""
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 10px; font-family: monospace; color: #94a3b8; margin-top: 10px;">
+                        <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e;"></span> Brands</span>
+                        <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: rgba(249, 115, 22, 0.2); border: 1px solid #f97316;"></span> Credentials</span>
+                        <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6;"></span> OTP/MFA</span>
+                        <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7;"></span> Currency</span>
+                        <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: rgba(219, 39, 119, 0.2); border: 1px solid #db2777;"></span> Urgency</span>
+                        <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444;"></span> URLs</span>
                     </div>
                     """, unsafe_allow_html=True)
-                
-                # Threat Intelligence details
-                with r_col2:
-                    st.markdown("#### 🔎 Threat Intelligence")
-                    st.markdown(f"**Attack Classification:** `{attack_type}`")
-                    st.markdown(f"**Primary Detection Reason:** `{reason}`")
-                    st.markdown("**Security Techniques Identified:**")
-                    if indicators:
-                        for tech in indicators:
-                            st.markdown(f"<span style='color: #00f2fe; font-size: 0.85rem;'>✓ {tech}</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<span style='color: #94a3b8; font-size: 0.85rem;'>No common phishing heuristic techniques detected.</span>", unsafe_allow_html=True)
+                    
+                with sub_tabs[1]:
+                    st.markdown("<h5 style='font-size:0.9rem; font-weight:700; margin-bottom:10px;'>Diagnostic Signal Checklist</h5>", unsafe_allow_html=True)
+                    for r_desc in reasons:
+                        st.markdown(f"<p style='font-size: 0.75rem; margin: 4px 0; color: #cbd5e1;'>• {r_desc}</p>", unsafe_allow_html=True)
 
-                # Explainable AI progress bars
-                st.markdown("<br>#### 🧠 Risk Factors Breakdown (Explainable AI)", unsafe_allow_html=True)
-                for index, r_desc in enumerate(reasons):
-                    st.markdown(f"• {r_desc}")
-                
-                # Interactive Semantic Highlighting Display
-                st.markdown("<br>#### 🗺️ Interactive Segment Color-Coding Highlighting", unsafe_allow_html=True)
-                st.markdown(f'<div class="cyber-terminal">{highlighted_output}</div>', unsafe_allow_html=True)
-                
-                # Report Generation Download Button
-                st.markdown("<br>", unsafe_allow_html=True)
-                report_markdown = f"""# AI CYBERSHIELD PHISHING THREAT REPORT
----
-**Scan Status:** {"⚠️ PHISHING DETECTED" if prediction == 1 else "🟢 SAFE EMAIL"}
-**Severity Score:** {risk_score} / 100 ({risk_label})
-**Classification Type:** {attack_type}
-**Engine Neural Confidence:** {confidence*100:.2f}%
-**Primary Reason:** {reason}
+                    if result.get("lexical_url_analysis"):
+                        st.markdown("<h5 style='font-size:0.9rem; font-weight:700; margin-top:15px; margin-bottom:10px;'>URL Lexical Anomalies</h5>", unsafe_allow_html=True)
+                        for k, v in result["lexical_url_analysis"].items():
+                            if isinstance(v, bool) and v:
+                                label = k.replace("has_", "").replace("_", " ").upper()
+                                st.markdown(f"<p style='font-size: 0.75rem; margin: 4px 0; color: #f87171;'>⚠️ {label}</p>", unsafe_allow_html=True)
 
-## Identified IOC Signatures
-""" + "\n".join(f"* {ind}" for ind in indicators) + f"""
+                # Action buttons panel
+                action_col1, action_col2 = st.columns(2)
+                with action_col1:
+                    report_content = f"""# AI CYBERSHIELD PHISHING THREAT REPORT
+======================================
+Verdict: {result["prediction"]}
+Risk Score: {risk_score}/100 ({severity})
+Category: {attack_type}
+Confidence: {confidence:.2f}%
+Primary Flag: {reason_str}
 
-## Threat Mitigating Recommendations
-1. {"DO NOT click any embedded links or credentials reset forms." if prediction == 1 else "The text looks standard, but always verify the email headers."}
-2. Report the sender's domain to your cybersecurity incident response team if domain spoofing is suspected.
-3. Use out-of-band verification (call or text via internal directories) if the sender asks for wire transfers.
-"""
-                st.download_button(
-                    label="DOWNLOAD COMPREHENSIVE THREAT REPORT",
-                    data=report_markdown,
-                    file_name="Cybershield_Threat_Report.md",
-                    mime="text/markdown"
-                )
+IOC Checklists:
+""" + "\n".join(f"- {ind}" for ind in indicators)
+                    st.download_button(
+                        label="EXPORT REPORT AS TXT",
+                        data=report_content,
+                        file_name=f"Threat_Intel_Report_{uuid.uuid4().hex[:8]}.txt",
+                        mime="text/plain"
+                    )
+                with action_col2:
+                    if st.button("CLEAR INSPECTION CONSOLE"):
+                        st.rerun()
             else:
-                st.info("💡 Input email text details and hit the 'EXECUTE MALWARE SCAN FILTERS' action button above to initialize detection routines.")
+                st.info("💡 Supply raw email payload details to run deep threat forensical classification checks.")
 
-    # ------------------ TAB 2: EMAIL HEADER ANALYZER ------------------
+    # ------------------ TAB 2: HEADER VALIDATION ------------------
     with tabs[1]:
-        st.markdown("<h4 style='color: #00f2fe; margin-bottom: 12px;'>📧 Cyber Authentication Header Parser</h4>", unsafe_allow_html=True)
-        st.write("Copy and paste raw email authentication routing headers below to check security alignments:")
+        st.markdown("<h4 style='font-weight: 800; font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px;'>📧 Mail Authentication Header Inspector</h4>", unsafe_allow_html=True)
+        st.write("Inspect verification values (SPF, DKIM, DMARC) inside email routing header structures:")
         
-        default_headers = """Received: from mail.attacker-spoof.xyz (mail.attacker-spoof.xyz [192.168.10.15])
-From: "Microsoft Security Office" <security@microsoft-verify.support>
-Reply-To: support@microsoft-helpdesk.ru
-Return-Path: bouncing-system@mail.attacker-spoof.xyz
+        header_sample = """Received: from gateway.phish-target.ru (gateway.phish-target.ru [198.51.100.22])
+From: "Google Workspace billing" <billing@google-verify.support>
+Reply-To: support@gdrive-billing.ru
+Return-Path: bounce@gateway.phish-target.ru
 SPF: Fail
 DKIM: Fail
 DMARC: Fail"""
-
-        header_input = st.text_area("Email Headers Input", value=default_headers, height=180)
-        check_headers = st.button("RUN ROUTING HEADER INTEGRITY CHECK")
         
-        if check_headers:
-            st.markdown("<br>#### 📝 Header Integrity Validation Logs", unsafe_allow_html=True)
+        headers_payload = st.text_area("Authentication Header Block", value=header_sample, height=200)
+        verify_headers = st.button("EXECUTE HEADER DIAGNOSTICS")
+        
+        if verify_headers:
+            st.markdown("<h5 style='font-weight: 700; font-size: 0.95rem; margin-top: 15px;'>Diagnostic Integrity Log</h5>", unsafe_allow_html=True)
             
-            # Simple heuristic header parse
-            spf_status = "None"
-            dkim_status = "None"
-            dmarc_status = "None"
-            reply_to = ""
-            from_addr = ""
-            return_path = ""
+            # Simple header extraction parser
+            spf_val = "none"
+            dkim_val = "none"
+            dmarc_val = "none"
+            reply_email = ""
+            from_email = ""
             
-            for line in header_input.split('\n'):
+            for line in headers_payload.split('\n'):
                 if line.lower().startswith("spf:"):
-                    spf_status = line.split(":", 1)[1].strip()
+                    spf_val = line.split(":", 1)[1].strip().lower()
                 elif line.lower().startswith("dkim:"):
-                    dkim_status = line.split(":", 1)[1].strip()
+                    dkim_val = line.split(":", 1)[1].strip().lower()
                 elif line.lower().startswith("dmarc:"):
-                    dmarc_status = line.split(":", 1)[1].strip()
+                    dmarc_val = line.split(":", 1)[1].strip().lower()
                 elif line.lower().startswith("reply-to:"):
-                    reply_to = line.split(":", 1)[1].strip()
+                    reply_email = line.split(":", 1)[1].strip()
                 elif line.lower().startswith("from:"):
-                    from_addr = line.split(":", 1)[1].strip()
-                elif line.lower().startswith("return-path:"):
-                    return_path = line.split(":", 1)[1].strip()
-            
-            # Diagnostic lists
-            diag_cols = st.columns(3)
-            
-            # SPF check
-            if "fail" in spf_status.lower():
-                diag_cols[0].error(f"SPF Status: {spf_status} (Failed Domain Validation)")
-            else:
-                diag_cols[0].success(f"SPF Status: {spf_status}")
-                
-            # DKIM Check
-            if "fail" in dkim_status.lower():
-                diag_cols[1].error(f"DKIM Status: {dkim_status} (Unsigned Signature Error)")
-            else:
-                diag_cols[1].success(f"DKIM Status: {dkim_status}")
-                
-            # DMARC Check
-            if "fail" in dmarc_status.lower():
-                diag_cols[2].error(f"DMARC Status: {dmarc_status} (Policy Fail Alert)")
-            else:
-                diag_cols[2].success(f"DMARC Status: {dmarc_status}")
-                
-            # Domain mismatches
-            st.markdown("#### 🚨 Routing Conflict Findings")
-            conflict_found = False
-            
-            # Extract domain names
-            from_domain = ""
-            reply_domain = ""
-            return_domain = ""
-            
-            if from_addr:
-                match = re.search(r'@([\w.-]+)', from_addr)
-                if match:
-                    from_domain = match.group(1).lower()
-            if reply_to:
-                match = re.search(r'@([\w.-]+)', reply_to)
-                if match:
-                    reply_domain = match.group(1).lower()
-            if return_path:
-                match = re.search(r'@([\w.-]+)', return_path)
-                if match:
-                    return_domain = match.group(1).lower()
-            
-            if from_domain and reply_domain and from_domain != reply_domain:
-                st.warning(f"⚠️ **Reply-To Domain Mismatch**: Sender claims domain '{from_domain}', but answers go to domain '{reply_domain}'!")
-                conflict_found = True
-            
-            if from_domain and return_domain and from_domain != return_domain:
-                st.warning(f"⚠️ **Return-Path Bounce Domain Mismatch**: Sender '{from_domain}' redirects bounces to '{return_domain}'!")
-                conflict_found = True
-                
-            # Domain mimicry brand check
-            if from_domain:
-                brands = ["microsoft", "paypal", "google", "netflix", "amazon", "chase", "apple"]
-                for brand in brands:
-                    if brand in from_domain and from_domain != f"{brand}.com" and not from_domain.endswith(f".{brand}.com"):
-                        st.error(f"🚨 **Potential Domain Spoofing / Mimicry**: Address '{from_domain}' contains brand name '{brand}', but is not sent from the official domain!")
-                        conflict_found = True
-            
-            if not conflict_found:
-                st.success("✅ Routing alignment checklist complete: No structural discrepancies found.")
-
-    # ------------------ TAB 3: URL REPUTATION CHECKER ------------------
-    with tabs[2]:
-        st.markdown("<h4 style='color: #00f2fe; margin-bottom: 12px;'>🔗 Cyber Shield Domain & URL Reputation Analytics</h4>", unsafe_allow_html=True)
-        url_check_input = st.text_input("Inspect URL Path", value="http://microsoft-login-verify-account.xyz/secure")
-        
-        run_url_analysis = st.button("INQUIRE URL REPUTATION INDEX")
-        
-        if run_url_analysis:
-            st.markdown("<br>#### 📊 Reputation Assessment Matrix", unsafe_allow_html=True)
-            
-            # Simple heuristic calculations
-            url_length = len(url_check_input)
-            has_https = url_check_input.lower().startswith("https")
-            contains_ip = 1 if re.search(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', url_check_input) else 0
-            
-            suspicious_tld_matched = None
-            tld_check_pattern = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
-            tld_match = tld_check_pattern.search(url_check_input)
-            if tld_match:
-                suspicious_tld_matched = tld_match.group(0)
-                
-            brand_mimicry_found = False
-            brand_targets = ["microsoft", "paypal", "netflix", "chase", "google", "apple"]
-            matched_brand = ""
-            for brand in brand_targets:
-                if brand in url_check_input.lower() and not re.search(fr'\b{brand}\.com', url_check_input.lower()):
-                    brand_mimicry_found = True
-                    matched_brand = brand
+                    from_email = line.split(":", 1)[1].strip()
                     
-            # Calculate Risk Score
-            url_risk = 15
-            if not has_https:
-                url_risk += 25
-            if contains_ip:
-                url_risk += 30
-            if suspicious_tld_matched:
-                url_risk += 25
-            if brand_mimicry_found:
-                url_risk += 30
-            url_risk = min(100, url_risk)
+            chk_c1, chk_c2, chk_c3 = st.columns(3)
+            with chk_c1:
+                if "fail" in spf_val:
+                    st.error("SPF Path check failed")
+                else:
+                    st.success("SPF Path alignment valid")
+            with chk_c2:
+                if "fail" in dkim_val:
+                    st.error("DKIM Check failed")
+                else:
+                    st.success("DKIM alignment valid")
+            with chk_c3:
+                if "fail" in dmarc_val:
+                    st.error("DMARC Enforcement alert")
+                else:
+                    st.success("DMARC Enforcement valid")
+
+            # Route checks
+            st.markdown("<h5 style='font-weight: 700; font-size: 0.95rem; margin-top: 15px;'>Conflicting Fields findings</h5>", unsafe_allow_html=True)
+            domain_conflict = False
             
+            f_dom = re.search(r'@([\w.-]+)', from_email)
+            r_dom = re.search(r'@([\w.-]+)', reply_email)
+            
+            if f_dom and r_dom:
+                f_dom_str = f_dom.group(1).lower()
+                r_dom_str = r_dom.group(1).lower()
+                if f_dom_str != r_dom_str:
+                    st.warning(f"⚠️ Mismatch detected: Sender domain is '{f_dom_str}', but answers route to '{r_dom_str}'.")
+                    domain_conflict = True
+                    
+            for brand in ["google", "microsoft", "paypal", "dhl", "linkedin"]:
+                if f_dom and brand in f_dom.group(1).lower() and f_dom.group(1).lower() != f"{brand}.com" and not f_dom.group(1).lower().endswith(f".{brand}.com"):
+                    st.error(f"🚨 Spoof check: sender address contains brand '{brand}' but domain '{f_dom.group(1).lower()}' is not official.")
+                    domain_conflict = True
+                    
+            if not domain_conflict:
+                st.success("No critical header routing conflicts identified.")
+
+    # ------------------ TAB 3: DOMAIN REPUTATION ------------------
+    with tabs[2]:
+        st.markdown("<h4 style='font-weight: 800; font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px;'>🛡️ Domain & URL Reputation Inspector</h4>", unsafe_allow_html=True)
+        url_input = st.text_input("Enter URL to Inspect", value="https://paypal.com-verification-login.xyz/secure/update")
+        verify_url = st.button("RUN DOMAIN CHECKS")
+        
+        if verify_url:
+            st.markdown("<h5 style='font-weight: 700; font-size: 0.95rem; margin-top: 15px;'>URL Reputation Summary</h5>", unsafe_allow_html=True)
+            
+            # Simple URL checks
+            has_ssl = url_input.lower().startswith("https")
+            has_ip = 1 if re.search(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', url_input) else 0
+            
+            suspicious_tld = None
+            tld_patterns = re.compile(r'\.(zip|mov|ru|xyz|top|support|info|cc|tk|gq|cf|ml)\b', re.IGNORECASE)
+            tld_match = tld_patterns.search(url_input)
+            if tld_match:
+                suspicious_tld = tld_match.group(0)
+                
+            brand_sp = False
+            for brand in ["paypal", "microsoft", "google", "netflix", "apple"]:
+                if brand in url_input.lower() and not re.search(fr'\b{brand}\.com', url_input.lower()):
+                    brand_sp = True
+                    
             u_c1, u_c2 = st.columns(2)
             with u_c1:
-                st.metric("Aggregate URL Risk Score", f"{url_risk}%", delta="Critical Risk" if url_risk >= 70 else "Low Risk")
-                st.markdown(f"**URL Length Check:** `{url_length} characters`")
-                st.markdown(f"**HTTPS Alignment Check:** `{'Secured' if has_https else 'Unencrypted HTTP Warning'}`")
-            
+                # Severity metric
+                url_risk = 10
+                if not has_ssl:
+                    url_risk += 30
+                if has_ip:
+                    url_risk += 30
+                if suspicious_tld:
+                    url_risk += 20
+                if brand_sp:
+                    url_risk += 20
+                st.metric("URL Target Threat Weight", f"{url_risk}%")
+                
             with u_c2:
-                st.markdown("**Core Reputation Threat Vectors:**")
-                if contains_ip:
-                    st.markdown("⚠️ URL targets raw IP address instead of registered domain records.")
-                if suspicious_tld_matched:
-                    st.markdown(f"⚠️ URL uses a high-risk TLD: `{suspicious_tld_matched}`")
-                if brand_mimicry_found:
-                    st.markdown(f"⚠️ URL mimics brand keyword `{matched_brand}` in subdomains or directory paths.")
-                if not has_https:
-                    st.markdown("⚠️ Connection uses plain HTTP. Missing SSL certificates.")
-                if url_risk < 40:
-                    st.markdown("✅ No common malicious URL features detected.")
+                st.markdown("**Checklist Flags:**")
+                if not has_ssl:
+                    st.error("⚠️ Connection is unencrypted HTTP.")
+                if has_ip:
+                    st.error("⚠️ Target directs to raw IP address instead of domain hostname.")
+                if suspicious_tld:
+                    st.error(f"⚠️ High-risk TLD file extension detected: {suspicious_tld}")
+                if brand_sp:
+                    st.error("⚠️ Domain mimics trusted corporate brand identities.")
+                if url_risk <= 10:
+                    st.success("No common malicious features identified.")
 
-    # ------------------ TAB 4: SYSTEM PERFORMANCE & ANALYTICS ------------------
+    # ------------------ TAB 4: BENCHMARKS ------------------
     with tabs[3]:
-        st.markdown("<h4 style='color: #00f2fe;'>📊 Training Metrics & Model Benchmarks</h4>", unsafe_allow_html=True)
-        st.write("Detailed quantitative results compiled from the cross-validated training suite:")
-        st.write("")
+        st.markdown("<h4 style='font-weight: 800; font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px;'>📈 System Analytics & ML Benchmarks</h4>", unsafe_allow_html=True)
         
-        # Display comparative model specs in a table
-        perf_data = {
-            "Model Classifier": ["Logistic Regression", "Naive Bayes (Multinomial)", "Random Forest (Tuned)", "Neural Network (MLP)"],
-            "Accuracy": ["94.2%", "91.8%", "95.1%", "95.6%"],
-            "Precision": ["93.1%", "90.2%", "94.8%", "95.2%"],
-            "Recall": ["92.8%", "89.5%", "93.9%", "94.4%"],
-            "F1-Score": ["92.9%", "89.8%", "94.3%", "94.8%"],
-            "ROC-AUC": ["0.985", "0.968", "0.993", "0.996"]
-        }
-        st.table(pd.DataFrame(perf_data))
+        # Display baseline metrics table
+        metrics_df = pd.DataFrame({
+            "Classifier model": ["Logistic Regression", "Naive Bayes", "Random Forest (Tuned)", "Neural Network (MLP)"],
+            "Accuracy": [0.942, 0.918, 0.951, 0.956],
+            "Precision": [0.931, 0.902, 0.948, 0.952],
+            "Recall": [0.928, 0.895, 0.939, 0.944],
+            "F1-Score": [0.929, 0.898, 0.943, 0.948],
+            "ROC-AUC": [0.985, 0.968, 0.993, 0.996]
+        })
+        st.table(metrics_df)
         
-        # Dynamic graphs comparison
-        st.markdown("#### 📈 Model Performance Graphical Comparison")
         st.line_chart(pd.DataFrame({
-            "Logistic Regression": [0.0, 0.75, 0.9, 0.95, 0.985],
-            "Naive Bayes": [0.0, 0.68, 0.85, 0.92, 0.968],
             "Random Forest": [0.0, 0.88, 0.96, 0.98, 0.993],
             "Neural Network": [0.0, 0.91, 0.97, 0.99, 0.996]
         }, index=["Epoch 0", "Epoch 1", "Epoch 2", "Epoch 3", "Epoch 4"]))
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            if os.path.exists("confusion_matrix.png"):
-                st.image("confusion_matrix.png", caption="Evaluation Confusion Matrix Heatmap", use_container_width=True)
-            else:
-                st.info("System Notification: Confusion matrix log image is missing.")
-        with c2:
-            if os.path.exists("roc_curve_comparison.png"):
-                st.image("roc_curve_comparison.png", caption="Model ROC-AUC Curves Blueprint", use_container_width=True)
-            else:
-                st.info("System Notification: ROC performance log chart is missing.")
 
-    # ------------------ TAB 5: DEFENSIVE BLUEPRINT ------------------
-    with tabs[4]:
-        st.markdown("<h4 style='color: #00f2fe; margin-bottom: 12px;'>🛡️ Operational Defense Blueprint & Incident Checklist</h4>", unsafe_allow_html=True)
-        st.write("Ensure your team enforces the following protocol guidelines when handling suspicious emails:")
-        st.write("")
-        
-        st.checkbox("✉️ **Sender Verification Check**: Confirm sender domains match standard business email format. Keep check for lookalike domains (e.g. micr0soft.com).")
-        st.checkbox("🔗 **Hyperlink Verification Check**: Hover over links without executing to reveal the destination URL domain suffix.")
-        st.checkbox("🔒 **MFA & Credential Safeguards**: Never input passwords or authentication codes on unauthenticated web forms.")
-        st.checkbox("📞 **Out-Of-Band Communication channels**: Call sender on official directories to verify transaction details or money transfers.")
-        
-        st.info("💡 **Pro-Tip**: Real phishing scams exploit urgency. Take 5 minutes to verify details out-of-band before taking any compliance actions.")
+        # Operational Command Stats row
+        st.markdown("<br><h4 style='font-weight: 800; font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px;'>📊 Live Operational Metrics</h4>", unsafe_allow_html=True)
+        s_c1, s_c2, s_c3, s_c4 = st.columns(4)
+        with s_c1:
+            render_metric_card("Total Scans Today", str(st.session_state.scanned_count))
+        with s_c2:
+            render_metric_card("Total Threats Blocked", str(st.session_state.threats_blocked))
+        with s_c3:
+            render_metric_card("Verified Safe Emails", str(st.session_state.safe_emails))
+        with s_c4:
+            render_metric_card("Average Scan Risk", f"{st.session_state.avg_risk_score}%")
